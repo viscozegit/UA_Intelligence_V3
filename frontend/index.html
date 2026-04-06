@@ -698,12 +698,28 @@
   }
 
   function onWeekChange(val) {
-    updateWeekBtn(val);
+    if (!val) return;
+    // 선택한 날짜 → 해당 주 월요일로 스냅
+    const monday = snapToMonday(val);
+    // input 값도 월요일로 고정
+    document.getElementById('weekPickerHidden').value = monday;
+    updateWeekBtn(monday);
   }
 
-  function updateWeekBtn(dateVal) {
-    if (!dateVal) return;
-    document.getElementById('weekBtnLabel').textContent = dateVal.replace(/-/g, '.');
+  // 날짜 문자열(YYYY-MM-DD) → 해당 주 월요일로 스냅
+  function snapToMonday(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    const day = date.getDay(); // 0=일, 1=월 ... 6=토
+    const diff = day === 0 ? -6 : 1 - day; // 월요일까지 이동
+    date.setDate(date.getDate() + diff);
+    return localDateStr(date);
+  }
+
+  function updateWeekBtn(mondayStr) {
+    if (!mondayStr) return;
+    // "YYYY.MM.DD 주" 형태로 표시
+    document.getElementById('weekBtnLabel').textContent = mondayStr.replace(/-/g, '.') + ' 주';
   }
 
   // Date → "YYYY-MM-DD" (로컬 타임존, UTC 변환 없음)
@@ -714,11 +730,11 @@
     return `${y}-${m}-${d}`;
   }
 
-  // 이전 week 포맷 호환용 (이제 date input이므로 값 그대로 반환)
+  // API 호출용: input 값(이미 월요일) 그대로 반환
   function weekToMonday(val) {
     if (!val) return localDateStr(new Date());
-    // "YYYY-Www" 형식이 혹시 남아있을 경우 변환
     if (val.includes('-W')) {
+      // 혹시 남아있는 week 포맷 처리
       const [yearStr, wStr] = val.split('-W');
       const year = parseInt(yearStr), week = parseInt(wStr);
       const jan4 = new Date(year, 0, 4);
@@ -728,7 +744,7 @@
       monday.setDate(startOfWeek1.getDate() + (week - 1) * 7);
       return localDateStr(monday);
     }
-    return val; // 이미 "YYYY-MM-DD"
+    return val;
   }
 
   async function loadMeta() {
