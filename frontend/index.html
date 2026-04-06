@@ -71,7 +71,6 @@
     select:focus { border-color: var(--accent); }
 
     .week-btn {
-      flex: 1;
       background: var(--surface);
       border: 1px solid var(--border);
       color: var(--text);
@@ -90,13 +89,19 @@
     .week-btn:hover, .week-btn:focus { border-color: var(--accent); outline: none; }
     .week-btn .cal-icon { font-size: 11px; opacity: 0.5; }
 
-    /* 네이티브 week picker는 숨김 처리, 클릭 시 트리거 용도 */
+    /* date input을 버튼 위에 투명하게 겹쳐서 클릭 이벤트 위임 */
+    .week-btn-wrap {
+      position: relative;
+      flex: 1;
+    }
     #weekPickerHidden {
       position: absolute;
+      inset: 0;
       opacity: 0;
-      pointer-events: none;
-      width: 0;
-      height: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
     }
 
     .btn {
@@ -586,11 +591,13 @@
         <select id="category" title="카테고리">
           <option value="6014">Games (All)</option>
         </select>
-        <button type="button" class="week-btn" id="weekBtn" onclick="document.getElementById('weekPickerHidden').showPicker()">
-          <span id="weekBtnLabel">—</span>
-          <span class="cal-icon">📅</span>
-        </button>
-        <input type="week" id="weekPickerHidden" onchange="onWeekChange(this.value)" />
+        <div class="week-btn-wrap">
+          <button type="button" class="week-btn" id="weekBtn" style="width:100%">
+            <span id="weekBtnLabel">—</span>
+            <span class="cal-icon">📅</span>
+          </button>
+          <input type="date" id="weekPickerHidden" onchange="onWeekChange(this.value)" />
+        </div>
       </div>
 
       <button class="btn btn-primary" id="fetchBtn" onclick="fetchData()">조회</button>
@@ -679,51 +686,49 @@
   })();
 
   function initWeekSelect() {
+    // 가장 최근 월요일을 기본값으로
     const today = new Date();
     const day = today.getDay();
     const lastMonday = new Date(today);
     lastMonday.setDate(today.getDate() - (day === 0 ? 6 : day - 1));
     lastMonday.setHours(0, 0, 0, 0);
-
-    const year = lastMonday.getFullYear();
-    const week = getISOWeek(lastMonday);
-    const weekVal = `${year}-W${week}`;
-    document.getElementById('weekPickerHidden').value = weekVal;
-    updateWeekBtn(weekVal);
+    const dateVal = localDateStr(lastMonday);
+    document.getElementById('weekPickerHidden').value = dateVal;
+    updateWeekBtn(dateVal);
   }
 
   function onWeekChange(val) {
     updateWeekBtn(val);
   }
 
-  function updateWeekBtn(weekVal) {
-    if (!weekVal) return;
-    const monday = weekToMonday(weekVal);
-    document.getElementById('weekBtnLabel').textContent = monday.replace(/-/g, '.');
+  function updateWeekBtn(dateVal) {
+    if (!dateVal) return;
+    document.getElementById('weekBtnLabel').textContent = dateVal.replace(/-/g, '.');
   }
 
-  function getISOWeek(date) {
-    const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
-    const week1 = new Date(d.getFullYear(), 0, 4);
-    return String(1 + Math.round(((d - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7)).padStart(2, '0');
-  }
-
-  // "YYYY-Www" → 해당 주 월요일의 "YYYY-MM-DD" (로컬 타임존 기준, UTC 변환 없음)
-  function weekToMonday(weekStr) {
-    const [yearStr, wStr] = weekStr.split('-W');
-    const year = parseInt(yearStr), week = parseInt(wStr);
-    const jan4 = new Date(year, 0, 4);
-    const startOfWeek1 = new Date(jan4);
-    startOfWeek1.setDate(jan4.getDate() - (jan4.getDay() || 7) + 1);
-    const monday = new Date(startOfWeek1);
-    monday.setDate(startOfWeek1.getDate() + (week - 1) * 7);
-    // toISOString()은 UTC 변환으로 하루 밀림 — 로컬 날짜 직접 포맷
-    const y = monday.getFullYear();
-    const m = String(monday.getMonth() + 1).padStart(2, '0');
-    const d = String(monday.getDate()).padStart(2, '0');
+  // Date → "YYYY-MM-DD" (로컬 타임존, UTC 변환 없음)
+  function localDateStr(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
+  }
+
+  // 이전 week 포맷 호환용 (이제 date input이므로 값 그대로 반환)
+  function weekToMonday(val) {
+    if (!val) return localDateStr(new Date());
+    // "YYYY-Www" 형식이 혹시 남아있을 경우 변환
+    if (val.includes('-W')) {
+      const [yearStr, wStr] = val.split('-W');
+      const year = parseInt(yearStr), week = parseInt(wStr);
+      const jan4 = new Date(year, 0, 4);
+      const startOfWeek1 = new Date(jan4);
+      startOfWeek1.setDate(jan4.getDate() - (jan4.getDay() || 7) + 1);
+      const monday = new Date(startOfWeek1);
+      monday.setDate(startOfWeek1.getDate() + (week - 1) * 7);
+      return localDateStr(monday);
+    }
+    return val; // 이미 "YYYY-MM-DD"
   }
 
   async function loadMeta() {
