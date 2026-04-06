@@ -251,13 +251,13 @@ async def download(url: str = Query(...), filename: str = Query("creative")):
                 async for chunk in r.aiter_bytes(chunk_size=65536):
                     yield chunk
 
-    # 확장자 추론
-    ext = ".mp4" if "video" in filename else ""
-    if not ext:
-        if url.endswith("/media"):
-            ext = ".mp4"
-
-    safe_name = filename + ext
+    # 확장자 추론 (이미 확장자가 붙어 있으면 중복 방지)
+    if filename.endswith(".mp4") or filename.endswith(".jpg") or filename.endswith(".png"):
+        safe_name = filename
+    elif "video" in filename or url.endswith("/media"):
+        safe_name = filename + ".mp4"
+    else:
+        safe_name = filename
     encoded_name = urllib.parse.quote(safe_name, safe="")
     headers = {
         "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_name}",

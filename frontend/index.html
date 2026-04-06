@@ -1256,7 +1256,9 @@
   // ── 공통 다운로드 유틸 (fetch+Blob → 확실한 파일 저장) ────
   async function downloadByUrl(encodedUrl, encodedFilename) {
     const url = decodeURIComponent(encodedUrl);
-    const filename = decodeURIComponent(encodedFilename) + '.mp4';
+    const rawName = decodeURIComponent(encodedFilename);
+    // 확장자: ad_type이 video면 .mp4, 나머지는 URL에서 추론
+    const filename = rawName.endsWith('.mp4') ? rawName : rawName + '.mp4';
     try {
       const resp = await fetch(`/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -1268,7 +1270,8 @@
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
+      // blob URL 즉시 revoke 시 브라우저가 파일 저장을 못 할 수 있으므로 지연 해제
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
     } catch (e) {
       console.error('Download failed', e);
       showToast('다운로드 실패: ' + e.message);
@@ -1299,7 +1302,9 @@
 
     for (let i = 0; i < keys.length; i++) {
       btn.textContent = `⬇ ${i + 1} / ${keys.length} 다운로드 중…`;
-      await downloadCreative(keys[i]);  // fetch 완료 후 다음으로 진행
+      await downloadCreative(keys[i]);  // fetch + blob 완료 후 다음으로 진행
+      // 브라우저가 이전 다운로드를 처리할 시간 확보
+      if (i < keys.length - 1) await new Promise(r => setTimeout(r, 800));
     }
 
     btn.disabled = false;
