@@ -244,6 +244,37 @@ async def download(url: str = Query(...), filename: str = Query("creative")):
     if not parsed.netloc.endswith(".s3.amazonaws.com"):
         raise HTTPException(status_code=400, detail="허용되지 않는 도메인입니다.")
 
+    # S3에서 Content-Type을 먼저 확인 (HEAD 요청)
+    async with httpx.AsyncClient(timeout=10) as hc:
+        head = await hc.head(url)
+        content_type = head.headers.get("content-type", "application/octet-stream")
+
+    # Content-Type → 확장자 매핑 (파일명에 확장자 없을 때만 추가)
+    KNOWN_EXTS = {".mp4", ".jpg", ".jpeg", ".png", ".gif", ".webp", ".zip", ".html"}
+    has_ext = any(filename.lower().endswith(e) for e in KNOWN_EXTS)
+    if not has_ext:
+        if "video" in content_type:
+            filename += ".mp4"
+        elif "jpeg" in content_type or "jpg" in content_type:
+            filename += ".jpg"
+        elif "png" in content_type:
+            filename += ".png"
+        elif "gif" in content_type:
+            filename += ".gif"
+        elif "webp" in content_type:
+            filename += ".webp"
+        elif "zip" in content_type:
+            filename += ".zip"
+        elif "html" in content_type:
+            filename += ".html"
+
+    encoded_name = urllib.parse.quote(filename, safe="")
+    headers = {
+        "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_name}",
+        "Content-Type": content_type,
+        "Cache-Control": "no-store",
+    }
+
     async def stream():
         async with httpx.AsyncClient(timeout=60) as c:
             async with c.stream("GET", url) as r:
@@ -251,19 +282,7 @@ async def download(url: str = Query(...), filename: str = Query("creative")):
                 async for chunk in r.aiter_bytes(chunk_size=65536):
                     yield chunk
 
-    # 확장자 추론 (이미 확장자가 붙어 있으면 중복 방지)
-    if filename.endswith(".mp4") or filename.endswith(".jpg") or filename.endswith(".png"):
-        safe_name = filename
-    elif "video" in filename or url.endswith("/media"):
-        safe_name = filename + ".mp4"
-    else:
-        safe_name = filename
-    encoded_name = urllib.parse.quote(safe_name, safe="")
-    headers = {
-        "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_name}",
-        "Cache-Control": "no-store",
-    }
-    return StreamingResponse(stream(), media_type="application/octet-stream", headers=headers)
+    return StreamingResponse(stream(), media_type=content_type, headers=headers)
 
 
 # ── Static Frontend ─────────────────────────────────────────

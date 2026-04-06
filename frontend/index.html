@@ -1220,7 +1220,7 @@
         </div>
       </div>
 
-      <button class="modal-dl-btn" onclick="downloadByUrl('${encodeURIComponent(mediaUrl)}', '${encodeURIComponent((appInfo?.name||'creative')+'_'+unit.id)}')">
+      <button class="modal-dl-btn" onclick="downloadByUrl('${encodeURIComponent(mediaUrl)}', '${encodeURIComponent((appInfo?.name||'creative')+'_'+unit.id+adTypeExt(unit.ad_type))}')">
         ⬇ 원본 다운로드
       </button>
     `;
@@ -1253,12 +1253,19 @@
     if (e.key === 'ArrowRight') { e.preventDefault(); navModal(1);  }
   });
 
+  // ── ad_type → 파일 확장자 ──────────────────────────────────
+  function adTypeExt(adType) {
+    const t = (adType || '').toLowerCase();
+    if (t.includes('video'))                          return '.mp4';
+    if (t.includes('playable') || t.includes('interactive')) return '.zip';
+    return '.jpg';   // image / banner / full_screen 등
+  }
+
   // ── 공통 다운로드 유틸 (fetch+Blob → 확실한 파일 저장) ────
   async function downloadByUrl(encodedUrl, encodedFilename) {
     const url = decodeURIComponent(encodedUrl);
-    const rawName = decodeURIComponent(encodedFilename);
-    // 확장자: ad_type이 video면 .mp4, 나머지는 URL에서 추론
-    const filename = rawName.endsWith('.mp4') ? rawName : rawName + '.mp4';
+    // 확장자는 호출부에서 이미 포함된 상태로 전달됨
+    const filename = decodeURIComponent(encodedFilename);
     try {
       const resp = await fetch(`/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -1282,7 +1289,8 @@
   async function downloadCreative(key) {
     const { creative, unit, appInfo } = creativeStore[key] || {};
     if (!creative?.creative_url) return;
-    const filename = `${appInfo?.name || 'creative'}_${unit.id}`;
+    const ext = adTypeExt(unit?.ad_type);
+    const filename = `${appInfo?.name || 'creative'}_${unit.id}${ext}`;
     await downloadByUrl(encodeURIComponent(creative.creative_url), encodeURIComponent(filename));
   }
 
