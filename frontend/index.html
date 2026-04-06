@@ -89,20 +89,80 @@
     .week-btn:hover, .week-btn:focus { border-color: var(--accent); outline: none; }
     .week-btn .cal-icon { font-size: 11px; opacity: 0.5; }
 
-    /* date input을 버튼 위에 투명하게 겹쳐서 클릭 이벤트 위임 */
+    /* ── 커스텀 주 선택 캘린더 ── */
     .week-btn-wrap {
       position: relative;
       flex: 1;
     }
-    #weekPickerHidden {
+    #weekPickerHidden { display: none; }
+
+    .wc-dropdown {
       position: absolute;
-      inset: 0;
-      opacity: 0;
-      cursor: pointer;
-      width: 100%;
-      height: 100%;
-      z-index: 2;
+      top: calc(100% + 6px);
+      left: 0;
+      z-index: 999;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      width: 224px;
+      display: none;
     }
+    .wc-dropdown.open { display: block; }
+
+    .wc-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .wc-nav button {
+      background: none;
+      border: none;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 16px;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .wc-nav button:hover { background: var(--surface2); }
+    .wc-nav span { font-size: 12px; font-weight: 600; }
+
+    .wc-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 1px;
+    }
+    .wc-dh {
+      text-align: center;
+      font-size: 10px;
+      color: var(--muted);
+      padding: 2px 0 4px;
+    }
+    /* 한 주 = 7칸짜리 행을 감싸는 래퍼 */
+    .wc-week-row {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .wc-week-row:hover { background: var(--surface2); }
+    .wc-week-row.selected { background: var(--accent); }
+    .wc-week-row.selected .wc-day { color: #fff; }
+
+    .wc-day {
+      text-align: center;
+      font-size: 11px;
+      padding: 5px 0;
+      color: var(--text);
+      border-radius: 4px;
+    }
+    .wc-day.empty { color: transparent; }
+    .wc-day.today { font-weight: 700; color: var(--accent2); }
+    .wc-week-row.selected .wc-day.today { color: #fff; }
 
     .btn {
       padding: 8px 14px; border-radius: 8px; border: none; cursor: pointer;
@@ -592,11 +652,19 @@
           <option value="6014">Games (All)</option>
         </select>
         <div class="week-btn-wrap">
-          <button type="button" class="week-btn" id="weekBtn" style="width:100%">
+          <button type="button" class="week-btn" id="weekBtn" style="width:100%" onclick="toggleWeekCalendar()">
             <span id="weekBtnLabel">—</span>
             <span class="cal-icon">📅</span>
           </button>
-          <input type="date" id="weekPickerHidden" onchange="onWeekChange(this.value)" />
+          <input type="hidden" id="weekPickerHidden" />
+          <div class="wc-dropdown" id="wcDropdown">
+            <div class="wc-nav">
+              <button onclick="wcNav(-1)">‹</button>
+              <span id="wcMonthLabel"></span>
+              <button onclick="wcNav(1)">›</button>
+            </div>
+            <div class="wc-grid" id="wcGrid"></div>
+          </div>
         </div>
       </div>
 
@@ -685,44 +753,111 @@
     initWeekSelect();
   })();
 
+  // ── 커스텀 주 캘린더 상태 ────────────────────────────────────
+  let wcYear, wcMonth;   // 현재 표시 중인 달
+  let wcSelected = '';   // 선택된 주의 월요일 (YYYY-MM-DD)
+
   function initWeekSelect() {
-    // 가장 최근 월요일을 기본값으로
     const today = new Date();
     const day = today.getDay();
     const lastMonday = new Date(today);
     lastMonday.setDate(today.getDate() - (day === 0 ? 6 : day - 1));
     lastMonday.setHours(0, 0, 0, 0);
-    const dateVal = localDateStr(lastMonday);
-    document.getElementById('weekPickerHidden').value = dateVal;
-    updateWeekBtn(dateVal);
+    wcYear  = lastMonday.getFullYear();
+    wcMonth = lastMonday.getMonth();
+    wcSelected = localDateStr(lastMonday);
+    document.getElementById('weekPickerHidden').value = wcSelected;
+    updateWeekBtn(wcSelected);
+    renderWcGrid();
+
+    // 캘린더 외부 클릭 시 닫기
+    document.addEventListener('click', e => {
+      const wrap = document.querySelector('.week-btn-wrap');
+      if (wrap && !wrap.contains(e.target)) closeWeekCalendar();
+    });
   }
 
-  function onWeekChange(val) {
-    if (!val) return;
-    // 선택한 날짜 → 해당 주 월요일로 스냅
-    const monday = snapToMonday(val);
-    // input 값도 월요일로 고정
-    document.getElementById('weekPickerHidden').value = monday;
-    updateWeekBtn(monday);
+  function toggleWeekCalendar() {
+    const dd = document.getElementById('wcDropdown');
+    dd.classList.toggle('open');
+    if (dd.classList.contains('open')) renderWcGrid();
+  }
+  function closeWeekCalendar() {
+    document.getElementById('wcDropdown').classList.remove('open');
   }
 
-  // 날짜 문자열(YYYY-MM-DD) → 해당 주 월요일로 스냅
-  function snapToMonday(dateStr) {
-    const [y, m, d] = dateStr.split('-').map(Number);
-    const date = new Date(y, m - 1, d);
-    const day = date.getDay(); // 0=일, 1=월 ... 6=토
-    const diff = day === 0 ? -6 : 1 - day; // 월요일까지 이동
-    date.setDate(date.getDate() + diff);
-    return localDateStr(date);
+  function wcNav(dir) {
+    wcMonth += dir;
+    if (wcMonth < 0)  { wcMonth = 11; wcYear--; }
+    if (wcMonth > 11) { wcMonth = 0;  wcYear++; }
+    renderWcGrid();
+  }
+
+  function renderWcGrid() {
+    const months = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+    document.getElementById('wcMonthLabel').textContent = `${wcYear}년 ${months[wcMonth]}`;
+
+    const grid = document.getElementById('wcGrid');
+    const today = localDateStr(new Date());
+
+    // 요일 헤더
+    let html = ['월','화','수','목','금','토','일'].map(d =>
+      `<div class="wc-dh">${d}</div>`).join('');
+
+    // 이 달 1일의 요일 (0=일..6=토) → 월요일 시작이므로 offset 계산
+    const firstDay = new Date(wcYear, wcMonth, 1).getDay();
+    const offset = firstDay === 0 ? 6 : firstDay - 1; // 1일 앞에 빈 칸 수
+    const daysInMonth = new Date(wcYear, wcMonth + 1, 0).getDate();
+
+    // 첫 행 시작 월요일 날짜 계산
+    const startDate = new Date(wcYear, wcMonth, 1 - offset);
+
+    // 6주치 행 생성
+    for (let week = 0; week < 6; week++) {
+      const monday = new Date(startDate);
+      monday.setDate(startDate.getDate() + week * 7);
+      const mondayStr = localDateStr(monday);
+
+      const isSelected = mondayStr === wcSelected;
+      html += `<div class="wc-week-row${isSelected ? ' selected' : ''}" onclick="selectWeek('${mondayStr}')">`;
+
+      for (let d = 0; d < 7; d++) {
+        const cur = new Date(monday);
+        cur.setDate(monday.getDate() + d);
+        const curStr = localDateStr(cur);
+        const inMonth = cur.getMonth() === wcMonth;
+        const isToday = curStr === today;
+        const cls = ['wc-day', !inMonth ? 'empty' : '', isToday ? 'today' : ''].filter(Boolean).join(' ');
+        html += `<div class="${cls}">${inMonth ? cur.getDate() : ''}</div>`;
+      }
+      html += `</div>`;
+
+      // 마지막 행이 완전히 다음 달이면 생략
+      const lastDayOfRow = new Date(monday);
+      lastDayOfRow.setDate(monday.getDate() + 6);
+      if (week >= 4 && lastDayOfRow.getMonth() !== wcMonth) break;
+    }
+
+    grid.innerHTML = html;
+  }
+
+  function selectWeek(mondayStr) {
+    wcSelected = mondayStr;
+    // 캘린더 표시 달을 선택된 주의 달로 이동
+    const [y, m] = mondayStr.split('-').map(Number);
+    wcYear = y; wcMonth = m - 1;
+    document.getElementById('weekPickerHidden').value = mondayStr;
+    updateWeekBtn(mondayStr);
+    renderWcGrid();
+    closeWeekCalendar();
   }
 
   function updateWeekBtn(mondayStr) {
     if (!mondayStr) return;
-    // "YYYY.MM.DD 주" 형태로 표시
     document.getElementById('weekBtnLabel').textContent = mondayStr.replace(/-/g, '.') + ' 주';
   }
 
-  // Date → "YYYY-MM-DD" (로컬 타임존, UTC 변환 없음)
+  // Date → "YYYY-MM-DD"
   function localDateStr(date) {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -730,21 +865,8 @@
     return `${y}-${m}-${d}`;
   }
 
-  // API 호출용: input 값(이미 월요일) 그대로 반환
   function weekToMonday(val) {
-    if (!val) return localDateStr(new Date());
-    if (val.includes('-W')) {
-      // 혹시 남아있는 week 포맷 처리
-      const [yearStr, wStr] = val.split('-W');
-      const year = parseInt(yearStr), week = parseInt(wStr);
-      const jan4 = new Date(year, 0, 4);
-      const startOfWeek1 = new Date(jan4);
-      startOfWeek1.setDate(jan4.getDate() - (jan4.getDay() || 7) + 1);
-      const monday = new Date(startOfWeek1);
-      monday.setDate(startOfWeek1.getDate() + (week - 1) * 7);
-      return localDateStr(monday);
-    }
-    return val;
+    return val || localDateStr(new Date());
   }
 
   async function loadMeta() {
