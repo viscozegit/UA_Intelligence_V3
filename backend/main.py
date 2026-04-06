@@ -285,15 +285,14 @@ async def download(url: str = Query(...), filename: str = Query("creative")):
     return StreamingResponse(stream(), media_type=content_type, headers=headers)
 
 
-# ── Static Frontend ─────────────────────────────────────────
-
+# ── Static Frontend (로컬 개발 전용, Vercel에서는 CDN이 서빙) ─
 frontend_dir = os.path.join(os.path.dirname(__file__), "..", "frontend")
-app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
+if os.path.isdir(frontend_dir):
+    app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
 
-
-@app.get("/", response_class=FileResponse)
-async def index():
-    return FileResponse(os.path.join(frontend_dir, "index.html"))
+    @app.get("/", response_class=FileResponse)
+    async def index():
+        return FileResponse(os.path.join(frontend_dir, "index.html"))
 
 
 if __name__ == "__main__":
