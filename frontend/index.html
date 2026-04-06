@@ -1026,8 +1026,8 @@
     }
 
     const rows = list.map(app => `
-      <div class="advertiser-item ${app.app_id === selectedAppId ? 'active' : ''}"
-           onclick="selectApp(${app.app_id})">
+      <div class="advertiser-item ${String(app.app_id) === String(selectedAppId) ? 'active' : ''}"
+           onclick="selectApp('${app.app_id}')">
         <div class="rank-badge ${app.rank <= 3 ? 'top3' : ''}">${app.rank}</div>
         ${app.icon_url
           ? `<img class="app-icon" src="${app.icon_url}" alt="${app.name}" onerror="this.style.display='none'">`
@@ -1049,12 +1049,12 @@
 
   // ── Select App ────────────────────────────────────────────
   function selectApp(appId) {
-    selectedAppId = appId;
+    selectedAppId = String(appId);
 
     // active 상태 갱신
     document.querySelectorAll('.advertiser-item').forEach(el => el.classList.remove('active'));
     const items = document.querySelectorAll('.advertiser-item');
-    const app = advertisers.find(a => a.app_id === appId);
+    const app = advertisers.find(a => String(a.app_id) === String(appId));
     if (!app) return;
 
     // 해당 항목 active
@@ -1082,7 +1082,7 @@
             <span class="chip">${app.os.toUpperCase()}</span>
           </div>
         </div>
-        <button class="btn-dl-all" id="dlAllBtn" onclick="downloadAll(${app.app_id})">
+        <button class="btn-dl-all" id="dlAllBtn" onclick="downloadAll('${app.app_id}')">
           ⬇ 전체 다운로드
         </button>
       </div>
@@ -1157,7 +1157,7 @@
     if (!modalKeys.includes(key)) {
       const appId = appInfo?.app_id;
       modalKeys = appId !== undefined
-        ? Object.keys(creativeStore).filter(k => creativeStore[k].appInfo?.app_id === appId)
+        ? Object.keys(creativeStore).filter(k => String(creativeStore[k].appInfo?.app_id) === String(appId))
         : [key];
     }
     modalIdx = modalKeys.indexOf(key);
@@ -1285,12 +1285,12 @@
 
   // ── 전체 다운로드 ──────────────────────────────────────────
   async function downloadAll(appId) {
-    const app = advertisers.find(a => a.app_id === appId);
+    const app = advertisers.find(a => String(a.app_id) === String(appId));
     if (!app) return;
 
     // creativeStore에서 해당 앱 소재 전부 수집
     const keys = Object.keys(creativeStore).filter(
-      k => creativeStore[k].appInfo?.app_id === appId && creativeStore[k].creative?.creative_url
+      k => String(creativeStore[k].appInfo?.app_id) === String(appId) && creativeStore[k].creative?.creative_url
     );
     if (!keys.length) return;
 
