@@ -1,0 +1,27 @@
+# 환경변수 / API 키
+backend/.env
+.env
+*.env
+
+# Claude Code 로컬 설정 (API 키 히스토리 포함)
+.claude/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+*.egg-info/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# 에디터
+.vscode/
+.idea/
+*.swp
+*.swo

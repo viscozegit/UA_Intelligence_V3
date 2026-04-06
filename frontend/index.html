@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UA Intelligence — Ad Creative Trend Report</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #22263a;
+      --border: #2e3350;
+      --accent: #6c63ff;
+      --accent2: #00d4aa;
+      --text: #e8eaf6;
+      --muted: #8892b0;
+      --danger: #ff6b6b;
+      --radius: 12px;
+    }
+
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; min-height: 100vh; }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { font-size: 17px; font-weight: 700; }
+    .logo span { color: var(--accent); }
+    .header-meta { font-size: 11px; color: var(--muted); }
+
+    /* ── Layout ── */
+    .layout {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      height: calc(100vh - 53px);
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar { border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+
+    .filters {
+      padding: 14px;
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .filter-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); font-weight: 600; }
+
+    .filter-row { display: flex; gap: 6px; }
+
+    select {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 8px;
+      border-radius: 7px;
+      font-size: 12px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    select:focus { border-color: var(--accent); }
+
+    .week-btn {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 8px;
+      border-radius: 7px;
+      font-size: 12px;
+      cursor: pointer;
+      text-align: left;
+      transition: border-color 0.2s;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 4px;
+    }
+    .week-btn:hover, .week-btn:focus { border-color: var(--accent); outline: none; }
+    .week-btn .cal-icon { font-size: 11px; opacity: 0.5; }
+
+    /* 네이티브 week picker는 숨김 처리, 클릭 시 트리거 용도 */
+    #weekPickerHidden {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+      width: 0;
+      height: 0;
+    }
+
+    .btn {
+      padding: 8px 14px; border-radius: 8px; border: none; cursor: pointer;
+      font-size: 13px; font-weight: 600; transition: opacity 0.2s, transform 0.1s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: var(--accent); color: #fff; width: 100%; margin-top: 2px; }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Advertiser List ── */
+    .advertiser-list { flex: 1; overflow-y: auto; }
+    .advertiser-list::-webkit-scrollbar { width: 4px; }
+    .advertiser-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .list-header {
+      padding: 8px 14px;
+      font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      position: sticky; top: 0;
+    }
+
+    .advertiser-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 12px;
+      cursor: pointer; transition: background 0.12s;
+      border-bottom: 1px solid rgba(46,51,80,0.5);
+    }
+    .advertiser-item:hover { background: var(--surface2); }
+    .advertiser-item.active { background: var(--surface2); border-left: 2px solid var(--accent); padding-left: 10px; }
+
+    .rank-badge {
+      min-width: 24px; height: 24px; border-radius: 6px;
+      background: var(--surface); border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 700; color: var(--muted);
+    }
+    .rank-badge.top3 { background: rgba(108,99,255,0.15); border-color: var(--accent); color: var(--accent); }
+
+    .app-icon {
+      width: 34px; height: 34px; border-radius: 8px;
+      object-fit: cover; background: var(--surface2); border: 1px solid var(--border); flex-shrink: 0;
+    }
+    .app-icon-ph {
+      width: 34px; height: 34px; border-radius: 8px;
+      background: var(--surface2); border: 1px solid var(--border);
+      flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 14px;
+    }
+
+    .app-info { flex: 1; min-width: 0; }
+    .app-name { font-weight: 600; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .app-sub { font-size: 10px; color: var(--muted); margin-top: 1px; }
+
+    .creative-count { text-align: right; flex-shrink: 0; }
+    .cc-val { font-size: 13px; font-weight: 700; color: var(--accent2); }
+    .cc-label { font-size: 9px; color: var(--muted); text-transform: uppercase; }
+
+    /* ── Main ── */
+    .main { overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+    .main::-webkit-scrollbar { width: 4px; }
+    .main::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* ── States ── */
+    .state-box {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 10px; padding: 48px 24px; color: var(--muted); text-align: center;
+    }
+    .state-box .icon { font-size: 40px; opacity: 0.4; }
+
+    .spinner {
+      width: 28px; height: 28px;
+      border: 3px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin 0.75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── App Detail Header ── */
+    .app-header {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 16px 20px;
+      display: flex; align-items: center; gap: 14px;
+    }
+    .app-header-icon {
+      width: 56px; height: 56px; border-radius: 12px;
+      object-fit: cover; background: var(--surface2); border: 1px solid var(--border);
+    }
+    .app-header-name { font-size: 18px; font-weight: 700; }
+    .app-header-meta { color: var(--muted); font-size: 12px; margin-top: 3px; }
+
+    .chips { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    .chip {
+      padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 600;
+      background: var(--surface2); border: 1px solid var(--border);
+    }
+    .chip.green { color: var(--accent2); border-color: rgba(0,212,170,0.3); }
+    .chip.purple { color: var(--accent); border-color: rgba(108,99,255,0.3); }
+
+    /* ── Section ── */
+    .section-title {
+      font-size: 11px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;
+    }
+
+    /* ── Creatives Grid ── */
+    .creatives-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 10px;
+    }
+
+    .creative-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden; cursor: pointer;
+      transition: border-color 0.2s, transform 0.15s;
+      position: relative;
+    }
+    .creative-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+
+    .thumb-wrap { position: relative; width: 100%; aspect-ratio: 9/16; background: var(--surface2); }
+    .creative-thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .thumb-ph { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 28px; color: var(--border); }
+
+    .play-icon {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+      width: 36px; height: 36px; border-radius: 50%;
+      background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center;
+      font-size: 14px; pointer-events: none;
+    }
+    .duration-badge {
+      position: absolute; bottom: 6px; right: 6px;
+      background: rgba(0,0,0,0.75); color: #fff;
+      font-size: 10px; font-weight: 600; padding: 2px 5px; border-radius: 4px;
+    }
+
+    /* 카드 다운로드 버튼 */
+    .card-dl-btn {
+      position: absolute; top: 7px; right: 7px; z-index: 2;
+      width: 28px; height: 28px; border-radius: 7px;
+      background: rgba(0,0,0,0.65); border: 1px solid rgba(255,255,255,0.15);
+      color: #fff; font-size: 13px;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity 0.15s;
+      cursor: pointer;
+    }
+    .creative-card:hover .card-dl-btn { opacity: 1; }
+    .card-dl-btn:hover { background: var(--accent); border-color: var(--accent); }
+
+    /* 전체 다운로드 버튼 */
+    .btn-dl-all {
+      padding: 7px 14px; border-radius: 8px;
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: border-color 0.2s, color 0.2s;
+      display: flex; align-items: center; gap: 5px; white-space: nowrap;
+    }
+    .btn-dl-all:hover { border-color: var(--accent2); color: var(--accent2); }
+    .btn-dl-all:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .creative-info { padding: 8px 10px; }
+    .creative-type-badge {
+      display: inline-block; padding: 2px 6px; border-radius: 4px;
+      font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+      margin-bottom: 4px;
+    }
+    .t-video { background: rgba(108,99,255,0.2); color: var(--accent); }
+    .t-image { background: rgba(0,212,170,0.15); color: var(--accent2); }
+    .t-playable { background: rgba(255,200,0,0.15); color: #ffc800; }
+    .t-other { background: rgba(255,107,107,0.15); color: var(--danger); }
+
+    .creative-formats { font-size: 10px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .creative-dates { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+    /* ── Creative Modal ── */
+    .modal-backdrop {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.85);
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+      animation: fadeIn 0.15s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    .modal-nav-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      max-width: 960px;
+      width: 100%;
+    }
+    .modal-nav-btn {
+      flex-shrink: 0;
+      width: 42px; height: 42px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: #fff;
+      font-size: 22px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s, opacity 0.15s;
+      line-height: 1;
+    }
+    .modal-nav-btn:hover:not(:disabled) { background: rgba(255,255,255,0.2); }
+    .modal-nav-btn:disabled { opacity: 0.2; cursor: default; }
+    .modal-nav-counter {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      color: rgba(255,255,255,0.5);
+      background: rgba(0,0,0,0.4);
+      padding: 2px 8px;
+      border-radius: 10px;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      display: flex;
+      gap: 0;
+      overflow: hidden;
+      max-height: 90vh;
+      max-width: 900px;
+      width: 100%;
+      animation: scaleIn 0.15s ease;
+    }
+    @keyframes scaleIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+    .modal-media {
+      flex-shrink: 0;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 360px;
+      min-height: 400px;
+      position: relative;
+    }
+    .modal-video {
+      max-width: 360px;
+      max-height: 80vh;
+      display: block;
+      outline: none;
+    }
+    .modal-image {
+      max-width: 360px;
+      max-height: 80vh;
+      object-fit: contain;
+      display: block;
+    }
+    .modal-no-media {
+      color: var(--muted); font-size: 13px; padding: 24px; text-align: center;
+    }
+
+    .modal-info {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-width: 0;
+    }
+    .modal-info::-webkit-scrollbar { width: 4px; }
+    .modal-info::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .modal-close {
+      position: absolute; top: 14px; right: 14px;
+      width: 30px; height: 30px; border-radius: 50%;
+      background: rgba(255,255,255,0.1); border: none;
+      color: #fff; font-size: 16px; cursor: pointer; z-index: 10;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s;
+    }
+    .modal-close:hover { background: rgba(255,255,255,0.2); }
+
+    .modal-app-row {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .modal-app-icon {
+      width: 48px; height: 48px; border-radius: 10px;
+      object-fit: cover; border: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .modal-app-name { font-size: 16px; font-weight: 700; }
+    .modal-app-pub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    .modal-meta-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .modal-meta-item {}
+    .modal-meta-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
+    .modal-meta-value { font-size: 13px; font-weight: 600; margin-top: 2px; }
+
+    .modal-dl-btn {
+      display: flex; align-items: center; justify-content: center; gap-6px;
+      padding: 10px; border-radius: 8px;
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); font-size: 13px; font-weight: 600;
+      text-decoration: none; cursor: pointer;
+      transition: border-color 0.2s;
+      gap: 6px;
+    }
+    .modal-dl-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Tab Nav ── */
+    .tab-nav { display: flex; gap: 2px; }
+    .tab-btn {
+      padding: 7px 18px; border-radius: 7px;
+      font-size: 13px; font-weight: 600;
+      background: none; border: none; color: var(--muted);
+      cursor: pointer; transition: color 0.15s, background 0.15s;
+      border-bottom: 2px solid transparent;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--text); border-bottom-color: var(--accent); }
+
+    /* ── Top Creatives ── */
+    .tc-main { display: flex; flex-direction: column; overflow: hidden; }
+    .tc-result-header {
+      padding: 10px 20px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      flex-shrink: 0; gap: 12px;
+    }
+    .tc-result-info { font-size: 12px; color: var(--muted); white-space: nowrap; }
+    .tc-per-page-row { display: flex; align-items: center; gap: 6px; }
+    .tc-per-page-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
+    .tc-per-page-sel {
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); padding: 4px 8px; border-radius: 6px;
+      font-size: 12px; outline: none; cursor: pointer;
+    }
+    .tc-per-page-sel:focus { border-color: var(--accent); }
+
+    .tc-scroll { flex: 1; overflow-y: auto; }
+    .tc-scroll::-webkit-scrollbar { width: 4px; }
+    .tc-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .tc-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 14px;
+      padding: 18px;
+    }
+    .tc-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden; cursor: pointer; position: relative;
+      transition: border-color 0.15s, transform 0.1s;
+    }
+    .tc-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+
+    .tc-rank {
+      position: absolute; top: 10px; left: 10px; z-index: 2;
+      background: rgba(0,0,0,0.75); color: #fff;
+      font-size: 11px; font-weight: 700;
+      padding: 3px 8px; border-radius: 10px;
+    }
+    .tc-rank.top3 { background: var(--accent); }
+
+    .tc-thumb-wrap {
+      position: relative; background: #000;
+      aspect-ratio: 9/16; overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .tc-thumb-wrap img { width: 100%; height: 100%; object-fit: cover; }
+    .tc-thumb-ph { color: var(--muted); font-size: 32px; }
+    .tc-play {
+      position: absolute; font-size: 28px; opacity: 0.85; pointer-events: none;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+    }
+    .tc-dur {
+      position: absolute; bottom: 8px; right: 8px;
+      background: rgba(0,0,0,0.7); color: #fff;
+      font-size: 10px; padding: 2px 6px; border-radius: 5px;
+    }
+    .tc-dl-btn {
+      position: absolute; top: 10px; right: 10px; z-index: 2;
+      width: 30px; height: 30px; border-radius: 7px;
+      background: rgba(0,0,0,0.65); border: none; color: #fff;
+      font-size: 13px; cursor: pointer; display: none;
+      align-items: center; justify-content: center;
+    }
+    .tc-card:hover .tc-dl-btn { display: flex; }
+    .tc-dl-btn:hover { background: var(--accent); }
+
+    .tc-app-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 10px 4px;
+    }
+    .tc-app-icon { width: 32px; height: 32px; border-radius: 7px; object-fit: cover; flex-shrink: 0; }
+    .tc-app-icon-ph { width: 32px; height: 32px; border-radius: 7px; background: var(--surface2); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+    .tc-app-text { min-width: 0; }
+    .tc-app-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tc-app-pub  { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+
+    .tc-footer { padding: 4px 10px 10px; display: flex; gap: 5px; flex-wrap: wrap; }
+    .tc-badge { font-size: 10px; padding: 2px 6px; border-radius: 5px; background: var(--surface2); color: var(--muted); white-space: nowrap; }
+
+    /* ── Pagination ── */
+    .tc-pagination {
+      padding: 14px 20px; border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      flex-shrink: 0;
+    }
+    .pg-btn {
+      min-width: 32px; height: 32px; padding: 0 8px;
+      border-radius: 7px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text);
+      font-size: 12px; cursor: pointer; transition: all 0.15s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .pg-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    .pg-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+    .pg-btn:disabled { opacity: 0.3; cursor: default; }
+    .pg-ellipsis { color: var(--muted); font-size: 12px; padding: 0 4px; }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed; bottom: 20px; right: 20px;
+      background: #2d1f1f; border: 1px solid var(--danger); color: #ffaaaa;
+      padding: 10px 14px; border-radius: var(--radius); font-size: 12px; z-index: 999;
+      display: none; max-width: 340px; word-break: break-word;
+    }
+    .toast.show { display: block; animation: slideIn 0.2s ease; }
+    @keyframes slideIn { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">UA <span>Intelligence</span></div>
+  <div class="tab-nav">
+    <button class="tab-btn active" id="tab-gameUA" onclick="switchTab('gameUA')">게임 UA</button>
+    <button class="tab-btn" id="tab-topCreatives" onclick="switchTab('topCreatives')">상위 소재</button>
+  </div>
+  <div class="header-meta" id="headerMeta">Sensor Tower Ad Intelligence</div>
+</header>
+
+<div class="layout">
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="filters">
+      <div class="filter-label">필터</div>
+
+      <div class="filter-row">
+        <select id="platform" title="플랫폼" onchange="loadMeta()">
+          <option value="all">📱 전체 플랫폼</option>
+          <option value="ios">iOS</option>
+          <option value="android">Android</option>
+        </select>
+        <select id="country" title="국가">
+          <option value="all">🌍 전체 국가</option>
+          <option value="US">🇺🇸 US</option>
+          <option value="KR">🇰🇷 KR</option>
+          <option value="JP">🇯🇵 JP</option>
+          <option value="GB">🇬🇧 GB</option>
+          <option value="DE">🇩🇪 DE</option>
+          <option value="FR">🇫🇷 FR</option>
+          <option value="BR">🇧🇷 BR</option>
+        </select>
+      </div>
+
+      <div class="filter-row">
+        <select id="network" title="네트워크">
+          <option value="all">📡 전체 네트워크</option>
+        </select>
+        <select id="adTypes" title="소재 유형">
+          <option value="all">🎨 전체 유형</option>
+          <option value="video">Video</option>
+          <option value="image">Image</option>
+          <option value="playable">Playable</option>
+          <option value="banner">Banner</option>
+        </select>
+      </div>
+
+      <div class="filter-row">
+        <select id="category" title="카테고리">
+          <option value="6014">Games (All)</option>
+        </select>
+        <button type="button" class="week-btn" id="weekBtn" onclick="document.getElementById('weekPickerHidden').showPicker()">
+          <span id="weekBtnLabel">—</span>
+          <span class="cal-icon">📅</span>
+        </button>
+        <input type="week" id="weekPickerHidden" onchange="onWeekChange(this.value)" />
+      </div>
+
+      <button class="btn btn-primary" id="fetchBtn" onclick="fetchData()">조회</button>
+    </div>
+
+    <div id="advertiserList" class="advertiser-list">
+      <div class="state-box">
+        <div class="icon">📊</div>
+        <p>필터를 선택하고<br>조회 버튼을 누르세요</p>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <main class="main" id="mainContent">
+    <div class="state-box">
+      <div class="icon">🎮</div>
+      <p>좌측에서 광고주를 선택하면<br>UA 소재를 확인할 수 있습니다</p>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ── Creative Modal ── -->
+<div class="modal-backdrop" id="modalBackdrop" style="display:none" onclick="closeModal(event)">
+  <div class="modal-nav-wrapper" id="modalNavWrapper">
+    <button class="modal-nav-btn" id="modalNavPrev" onclick="navModal(-1)" title="이전 소재 (←)">‹</button>
+    <div class="modal" id="modal">
+      <div class="modal-media" id="modalMedia">
+        <button class="modal-close" onclick="closeModal()">✕</button>
+        <span class="modal-nav-counter" id="modalNavCounter"></span>
+      </div>
+      <div class="modal-info" id="modalInfo"></div>
+    </div>
+    <button class="modal-nav-btn" id="modalNavNext" onclick="navModal(1)" title="다음 소재 (→)">›</button>
+  </div>
+</div>
+
+<script>
+  // ── State ──────────────────────────────────────────────────
+  let allAdUnits = [];          // raw API response
+  let advertisers = [];         // grouped by app
+  let selectedAppId = null;
+  let modalKeys = [];           // 현재 앱의 소재 key 순서
+  let modalIdx  = -1;           // 현재 열린 소재 인덱스
+  let activeTab    = 'gameUA';  // 현재 탭
+
+  // ── Tab Switch ─────────────────────────────────────────────
+  function switchTab(tab) {
+    if (activeTab === tab) return;
+    activeTab = tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(`tab-${tab}`).classList.add('active');
+
+    const advertiserList   = document.getElementById('advertiserList');
+
+    if (tab === 'topCreatives') {
+      advertiserList.style.display = 'none';
+      document.getElementById('mainContent').className = 'main tc-main';
+      document.getElementById('mainContent').innerHTML =
+        '<div class="state-box"><div class="icon">🎨</div><p>필터를 선택하고<br>조회 버튼을 누르세요</p></div>';
+    } else {
+      advertiserList.style.display = '';
+      document.getElementById('mainContent').className = 'main';
+      document.getElementById('mainContent').innerHTML =
+        '<div class="state-box"><div class="icon">🎮</div><p>좌측에서 광고주를 선택하면<br>UA 소재를 확인할 수 있습니다</p></div>';
+    }
+    document.getElementById('headerMeta').textContent = 'Sensor Tower Ad Intelligence';
+  }
+
+  // ── Init ───────────────────────────────────────────────────
+  (async function init() {
+    // 기본값 설정
+    document.getElementById('platform').value = 'all';
+    document.getElementById('country').value  = 'KR';
+    document.getElementById('adTypes').value  = 'all';
+
+    // 플랫폼에 맞는 네트워크·카테고리 로드 후 Youtube·Games 선택
+    await loadMeta();
+    document.getElementById('network').value  = 'Youtube';
+    // category는 loadMeta에서 첫 번째(Games All)가 기본 선택됨
+
+    // 주 달력 초기화 (가장 최근 주)
+    initWeekSelect();
+  })();
+
+  function initWeekSelect() {
+    const today = new Date();
+    const day = today.getDay();
+    const lastMonday = new Date(today);
+    lastMonday.setDate(today.getDate() - (day === 0 ? 6 : day - 1));
+    lastMonday.setHours(0, 0, 0, 0);
+
+    const year = lastMonday.getFullYear();
+    const week = getISOWeek(lastMonday);
+    const weekVal = `${year}-W${week}`;
+    document.getElementById('weekPickerHidden').value = weekVal;
+    updateWeekBtn(weekVal);
+  }
+
+  function onWeekChange(val) {
+    updateWeekBtn(val);
+  }
+
+  function updateWeekBtn(weekVal) {
+    if (!weekVal) return;
+    const monday = weekToMonday(weekVal);
+    document.getElementById('weekBtnLabel').textContent = monday.replace(/-/g, '.');
+  }
+
+  function getISOWeek(date) {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+    const week1 = new Date(d.getFullYear(), 0, 4);
+    return String(1 + Math.round(((d - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7)).padStart(2, '0');
+  }
+
+  // "YYYY-Www" → 해당 주 월요일의 "YYYY-MM-DD" (로컬 타임존 기준, UTC 변환 없음)
+  function weekToMonday(weekStr) {
+    const [yearStr, wStr] = weekStr.split('-W');
+    const year = parseInt(yearStr), week = parseInt(wStr);
+    const jan4 = new Date(year, 0, 4);
+    const startOfWeek1 = new Date(jan4);
+    startOfWeek1.setDate(jan4.getDate() - (jan4.getDay() || 7) + 1);
+    const monday = new Date(startOfWeek1);
+    monday.setDate(startOfWeek1.getDate() + (week - 1) * 7);
+    // toISOString()은 UTC 변환으로 하루 밀림 — 로컬 날짜 직접 포맷
+    const y = monday.getFullYear();
+    const m = String(monday.getMonth() + 1).padStart(2, '0');
+    const d = String(monday.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  async function loadMeta() {
+    const platform = document.getElementById('platform').value;
+    try {
+      const res = await fetch(`/api/meta?platform=${platform}`);
+      const { networks, categories } = await res.json();
+
+      // 네트워크 드롭다운 갱신 (전체 옵션 유지)
+      const netSel = document.getElementById('network');
+      const prevNet = netSel.value;
+      netSel.innerHTML =
+        `<option value="all">📡 전체 네트워크</option>` +
+        networks.map(n => `<option value="${n}">${n}</option>`).join('');
+      netSel.value = networks.includes(prevNet) ? prevNet : 'all';
+
+      // 카테고리 드롭다운 갱신 (전체 옵션 유지)
+      const catSel = document.getElementById('category');
+      const prevCat = catSel.value;
+      const catEntries = Object.entries(categories);
+      catSel.innerHTML =
+        `<option value="all">🎮 전체 카테고리</option>` +
+        catEntries.map(([label, val]) => `<option value="${val}">${label}</option>`).join('');
+      const catVals = catEntries.map(([, v]) => v);
+      catSel.value = catVals.includes(prevCat) ? prevCat : catEntries[0]?.[1] ?? 'all';
+    } catch (_) { /* 무시 */ }
+  }
+
+  // ── Helpers ────────────────────────────────────────────────
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = '⚠ ' + msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 5000);
+  }
+
+  function setBtn(loading) {
+    const b = document.getElementById('fetchBtn');
+    b.disabled = loading;
+    b.textContent = loading ? '조회 중…' : '조회';
+  }
+
+  function typeClass(type) {
+    if (!type) return 't-other';
+    const t = type.toLowerCase();
+    if (t.includes('video')) return 't-video';
+    if (t.includes('playable')) return 't-playable';
+    if (t.includes('image') || t.includes('banner')) return 't-image';
+    return 't-other';
+  }
+
+  function fmtDuration(sec) {
+    if (!sec) return '';
+    return sec >= 60 ? `${Math.floor(sec/60)}m${sec%60 ? sec%60+'s' : ''}` : `${sec}s`;
+  }
+
+  // ── Fetch (탭에 따라 분기) ────────────────────────────────────
+  async function fetchData() {
+    if (activeTab === 'topCreatives') {
+      await fetchTopCreatives(); return;
+    }
+    setBtn(true);
+    selectedAppId = null;
+
+    document.getElementById('advertiserList').innerHTML =
+      '<div class="state-box"><div class="spinner"></div><p>불러오는 중…</p></div>';
+    document.getElementById('mainContent').innerHTML =
+      '<div class="state-box"><div class="spinner"></div><p>소재 분석 중…</p></div>';
+
+    const params = new URLSearchParams({
+      platform: document.getElementById('platform').value,
+      network: document.getElementById('network').value,
+      ad_types: document.getElementById('adTypes').value,
+      country: document.getElementById('country').value,
+      category: document.getElementById('category').value,
+      date: weekToMonday(document.getElementById('weekPickerHidden').value),
+      limit: 100,
+    });
+
+    try {
+      const res = await fetch(`/api/top-advertisers?${params}`);
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      advertisers = data.advertisers || [];
+      allAdUnits = advertisers.flatMap(a => a.ad_units || []);
+
+      const network = document.getElementById('network').value;
+      const weekLabel = document.getElementById('weekBtnLabel').textContent;
+      document.getElementById('headerMeta').textContent =
+        `${network} · ${weekLabel} · ${advertisers.length}개 광고주 · ${allAdUnits.length}개 소재`;
+
+      renderAdvertiserList(advertisers);
+
+      document.getElementById('mainContent').innerHTML =
+        '<div class="state-box"><div class="icon">👈</div><p>좌측에서 광고주를 선택하세요</p></div>';
+    } catch (e) {
+      showToast(e.message);
+      document.getElementById('advertiserList').innerHTML =
+        `<div class="state-box"><div class="icon">⚠️</div><p>${e.message}</p></div>`;
+      document.getElementById('mainContent').innerHTML = '';
+    } finally {
+      setBtn(false);
+    }
+  }
+
+  // ── Top Creatives Fetch ────────────────────────────────────
+  async function fetchTopCreatives() {
+    setBtn(true);
+    const main = document.getElementById('mainContent');
+    main.innerHTML = '<div class="state-box"><div class="spinner"></div><p>소재 불러오는 중…</p></div>';
+
+    const params = new URLSearchParams({
+      platform: document.getElementById('platform').value,
+      network:  document.getElementById('network').value,
+      ad_types: document.getElementById('adTypes').value,
+      country:  document.getElementById('country').value,
+      category: document.getElementById('category').value,
+      date:     weekToMonday(document.getElementById('weekPickerHidden').value),
+      limit: 100,
+    });
+
+    try {
+      const res = await fetch(`/api/top-creatives?${params}`);
+      if (!res.ok) { const e = await res.json(); throw new Error(e.detail || `HTTP ${res.status}`); }
+      const data = await res.json();
+      const list = data.creatives || [];
+      const weekLabel = document.getElementById('weekBtnLabel').textContent;
+      document.getElementById('headerMeta').textContent =
+        `${document.getElementById('network').value} · ${weekLabel} · 상위 소재 ${list.length}개`;
+      renderTopCreatives(list);
+    } catch (e) {
+      showToast(e.message);
+      main.innerHTML = `<div class="state-box"><div class="icon">⚠️</div><p>${e.message}</p></div>`;
+    } finally {
+      setBtn(false);
+    }
+  }
+
+  // ── Top Creatives State ────────────────────────────────────
+  let tcAllItems  = [];   // 전체 소재 목록 (fetch 결과)
+  let tcAllKeys   = [];   // 전체 key 순서 (모달 nav 용)
+  let tcPage      = 1;
+  let tcPerPage   = 20;
+
+  // ── Top Creatives Render (전체 저장 후 1페이지 렌더) ──────
+  function renderTopCreatives(list) {
+    const main = document.getElementById('mainContent');
+    if (!list.length) {
+      main.innerHTML = '<div class="state-box"><div class="icon">🔍</div><p>결과 없음</p></div>';
+      return;
+    }
+
+    // creativeStore 등록 + 전역 키 목록 구성
+    tcAllKeys = [];
+    list.forEach(item => {
+      const key = item.creative.id || Math.random().toString(36).slice(2);
+      creativeStore[key] = { creative: item.creative, unit: item.unit, appInfo: item.app_info };
+      item._key = key;
+      tcAllKeys.push(key);
+    });
+    tcAllItems = list;
+    tcPage = 1;
+
+    // 레이아웃 뼈대 (헤더 + 스크롤 영역 + 페이지네이션)
+    main.innerHTML = `
+      <div class="tc-result-header">
+        <span class="tc-result-info" id="tcResultInfo"></span>
+        <div class="tc-per-page-row">
+          <span class="tc-per-page-label">페이지당</span>
+          <select class="tc-per-page-sel" id="tcPerPageSel" onchange="setTcPerPage(+this.value)">
+            <option value="10">10개</option>
+            <option value="20" selected>20개</option>
+            <option value="50">50개</option>
+            <option value="100">100개</option>
+          </select>
+        </div>
+      </div>
+      <div class="tc-scroll" id="tcScroll">
+        <div class="tc-grid" id="tcGrid"></div>
+      </div>
+      <div class="tc-pagination" id="tcPagination"></div>`;
+
+    renderTcPage();
+  }
+
+  function renderTcPage() {
+    const total  = tcAllItems.length;
+    const pages  = Math.ceil(total / tcPerPage);
+    const start  = (tcPage - 1) * tcPerPage;
+    const slice  = tcAllItems.slice(start, start + tcPerPage);
+    const sliceKeys = tcAllKeys.slice(start, start + tcPerPage);
+
+    // 결과 정보
+    document.getElementById('tcResultInfo').textContent =
+      `총 ${total}개 소재 · ${start + 1}–${Math.min(start + tcPerPage, total)} 표시`;
+
+    // 카드 그리드
+    const cards = slice.map(item => {
+      const { creative, unit, app_info: appInfo, rank, _key: key } = item;
+      const thumb   = creative.thumb_url || '';
+      const type    = unit.ad_type || '';
+      const isVideo = type.includes('video');
+      const dur     = creative.video_duration ? fmtDuration(creative.video_duration) : '';
+      const net     = unit.network || '';
+      const ctry    = unit.country || '';
+      const pub     = appInfo?.publisher_name || '';
+
+      const iconHtml = appInfo?.icon_url
+        ? `<img class="tc-app-icon" src="${appInfo.icon_url}" alt="" onerror="this.style.display='none'">`
+        : `<div class="tc-app-icon-ph">🎮</div>`;
+
+      return `
+        <div class="tc-card">
+          <div class="tc-rank ${rank <= 3 ? 'top3' : ''}">#${rank}</div>
+          <button class="tc-dl-btn" title="다운로드">⬇</button>
+          <div class="tc-thumb-wrap">
+            ${thumb ? `<img src="${thumb}" alt="" loading="lazy">` : '<div class="tc-thumb-ph">🖼️</div>'}
+            ${isVideo ? '<div class="tc-play">▶</div>' : ''}
+            ${dur ? `<div class="tc-dur">${dur}</div>` : ''}
+          </div>
+          <div class="tc-app-row">
+            ${iconHtml}
+            <div class="tc-app-text">
+              <div class="tc-app-name" title="${appInfo?.name || ''}">${appInfo?.name || '—'}</div>
+              ${pub ? `<div class="tc-app-pub">${pub}</div>` : ''}
+            </div>
+          </div>
+          <div class="tc-footer">
+            ${type ? `<span class="tc-badge creative-type-badge ${typeClass(type)}">${type}</span>` : ''}
+            ${net  ? `<span class="tc-badge">${net}</span>` : ''}
+            ${ctry ? `<span class="tc-badge">${ctry}</span>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+
+    document.getElementById('tcGrid').innerHTML = cards;
+
+    // 이벤트 바인딩
+    document.getElementById('tcGrid').querySelectorAll('.tc-card').forEach((el, i) => {
+      const globalIdx = start + i;
+      el.onclick = () => {
+        modalKeys = tcAllKeys;
+        modalIdx  = globalIdx;
+        openCreativeModal(sliceKeys[i]);
+      };
+      el.querySelector('.tc-dl-btn').onclick = e => {
+        e.stopPropagation();
+        downloadCreative(sliceKeys[i]);
+      };
+    });
+
+    // 페이지네이션 버튼
+    document.getElementById('tcPagination').innerHTML = buildPagination(tcPage, pages);
+
+    // 스크롤 맨 위
+    const scroll = document.getElementById('tcScroll');
+    if (scroll) scroll.scrollTop = 0;
+  }
+
+  function buildPagination(current, total) {
+    if (total <= 1) return '';
+    const btn = (p, label, cls = '') =>
+      `<button class="pg-btn ${cls}" onclick="setTcPage(${p})" ${p === current ? 'disabled' : ''}
+        ${cls === 'active' ? 'style="pointer-events:none"' : ''}>${label}</button>`;
+
+    let html = btn(current - 1, '‹', current === 1 ? 'disabled' : '');
+    const range = new Set([1, total, current - 1, current, current + 1].filter(p => p >= 1 && p <= total));
+    let prev = 0;
+    [...range].sort((a, b) => a - b).forEach(p => {
+      if (prev && p - prev > 1) html += '<span class="pg-ellipsis">…</span>';
+      html += btn(p, p, p === current ? 'active' : '');
+      prev = p;
+    });
+    html += btn(current + 1, '›', current === total ? 'disabled' : '');
+    return html;
+  }
+
+  function setTcPage(p) {
+    const pages = Math.ceil(tcAllItems.length / tcPerPage);
+    if (p < 1 || p > pages) return;
+    tcPage = p;
+    renderTcPage();
+  }
+
+  function setTcPerPage(n) {
+    tcPerPage = n;
+    tcPage = 1;
+    renderTcPage();
+  }
+
+  // ── Render Advertiser List ─────────────────────────────────
+  function renderAdvertiserList(list) {
+    if (!list.length) {
+      document.getElementById('advertiserList').innerHTML =
+        '<div class="state-box"><div class="icon">🔍</div><p>결과 없음</p></div>';
+      return;
+    }
+
+    const rows = list.map(app => `
+      <div class="advertiser-item ${app.app_id === selectedAppId ? 'active' : ''}"
+           onclick="selectApp(${app.app_id})">
+        <div class="rank-badge ${app.rank <= 3 ? 'top3' : ''}">${app.rank}</div>
+        ${app.icon_url
+          ? `<img class="app-icon" src="${app.icon_url}" alt="${app.name}" onerror="this.style.display='none'">`
+          : `<div class="app-icon-ph">🎮</div>`}
+        <div class="app-info">
+          <div class="app-name">${app.name}</div>
+          <div class="app-sub">${app.publisher_name}</div>
+        </div>
+        <div class="creative-count">
+          <div class="cc-val">${app.creative_count}</div>
+          <div class="cc-label">소재</div>
+        </div>
+      </div>
+    `).join('');
+
+    document.getElementById('advertiserList').innerHTML =
+      `<div class="list-header">총 ${list.length}개 광고주</div>${rows}`;
+  }
+
+  // ── Select App ────────────────────────────────────────────
+  function selectApp(appId) {
+    selectedAppId = appId;
+
+    // active 상태 갱신
+    document.querySelectorAll('.advertiser-item').forEach(el => el.classList.remove('active'));
+    const items = document.querySelectorAll('.advertiser-item');
+    const app = advertisers.find(a => a.app_id === appId);
+    if (!app) return;
+
+    // 해당 항목 active
+    items.forEach(el => {
+      if (el.querySelector('.app-name')?.textContent === app.name) {
+        el.classList.add('active');
+      }
+    });
+
+    // 소재 목록 (이미 로딩된 데이터에서 필터)
+    const units = app.ad_units || [];
+
+    const main = document.getElementById('mainContent');
+    main.innerHTML = `
+      <div class="app-header">
+        ${app.icon_url
+          ? `<img class="app-header-icon" src="${app.icon_url}" alt="${app.name}">`
+          : `<div class="app-header-icon" style="display:flex;align-items:center;justify-content:center;font-size:26px;">🎮</div>`}
+        <div>
+          <div class="app-header-name">${app.name}</div>
+          <div class="app-header-meta">${app.publisher_name} · 순위 #${app.rank}</div>
+          <div class="chips">
+            <span class="chip green">🎨 소재 ${app.creative_count}개</span>
+            <span class="chip purple">📦 Ad Unit ${units.length}개</span>
+            <span class="chip">${app.os.toUpperCase()}</span>
+          </div>
+        </div>
+        <button class="btn-dl-all" id="dlAllBtn" onclick="downloadAll(${app.app_id})">
+          ⬇ 전체 다운로드
+        </button>
+      </div>
+      <div>
+        <div class="section-title">UA 광고 소재 (${units.length}개 Ad Unit)</div>
+        <div class="creatives-grid">
+          ${units.map(unit => {
+            const c = (unit.creatives || [])[0];
+            return c ? renderCreativeCard(c, unit, app) : '';
+          }).join('') || '<div style="color:var(--muted);padding:12px">소재 없음</div>'}
+        </div>
+      </div>
+    `;
+  }
+
+  // ── Creative Store (카드 클릭 시 데이터 전달용) ──────────────
+  const creativeStore = {};
+
+  // ── Render Creative Card ───────────────────────────────────
+  function renderCreativeCard(creative, unit, appInfo) {
+    const thumb = creative.thumb_url || '';
+    const type  = unit.ad_type || 'unknown';
+    const dur   = creative.video_duration ? fmtDuration(creative.video_duration) : '';
+    const isVideo = type.includes('video');
+
+    // 클릭 시 조회할 데이터 저장
+    const key = creative.id || (Math.random().toString(36).slice(2));
+    creativeStore[key] = { creative, unit, appInfo };
+
+    return `
+      <div class="creative-card" onclick="openCreativeModal('${key}')">
+        <button class="card-dl-btn" title="다운로드" onclick="event.stopPropagation(); downloadCreative('${key}')">⬇</button>
+        <div class="thumb-wrap">
+          ${thumb
+            ? `<img class="creative-thumb" src="${thumb}" alt="" loading="lazy" onerror="this.parentNode.innerHTML='<div class=thumb-ph>🖼️</div>'">`
+            : `<div class="thumb-ph">🖼️</div>`}
+          ${isVideo ? `<div class="play-icon">▶</div>` : ''}
+          ${dur ? `<div class="duration-badge">${dur}</div>` : ''}
+        </div>
+        <div class="creative-info">
+          <span class="creative-type-badge ${typeClass(type)}">${type}</span>
+          <div class="creative-formats">${(unit.ad_formats || []).join(', ') || '—'}</div>
+          <div class="creative-dates">${unit.first_seen_at || ''} ~ ${unit.last_seen_at || ''}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  // ── Modal Nav ──────────────────────────────────────────────
+  function navModal(dir) {
+    const next = modalIdx + dir;
+    if (next < 0 || next >= modalKeys.length) return;
+    openCreativeModal(modalKeys[next]);
+  }
+
+  function updateNavButtons() {
+    const prev = document.getElementById('modalNavPrev');
+    const next = document.getElementById('modalNavNext');
+    const counter = document.getElementById('modalNavCounter');
+    if (prev) prev.disabled = modalIdx <= 0;
+    if (next) next.disabled = modalIdx >= modalKeys.length - 1;
+    if (counter) counter.textContent = modalKeys.length > 1 ? `${modalIdx + 1} / ${modalKeys.length}` : '';
+  }
+
+  // ── Modal Open ─────────────────────────────────────────────
+  function openCreativeModal(key) {
+    const { creative, unit, appInfo } = creativeStore[key] || {};
+    if (!creative) return;
+
+    // modalKeys에 이미 이 key가 있으면 (tc뷰에서 미리 설정된 경우) 유지
+    // 없으면 같은 앱 소재 목록으로 새로 구성
+    if (!modalKeys.includes(key)) {
+      const appId = appInfo?.app_id;
+      modalKeys = appId !== undefined
+        ? Object.keys(creativeStore).filter(k => creativeStore[k].appInfo?.app_id === appId)
+        : [key];
+    }
+    modalIdx = modalKeys.indexOf(key);
+
+    const type    = unit.ad_type || '';
+    const isVideo = type.includes('video');
+    const mediaUrl = creative.creative_url || '';
+    const dur      = creative.video_duration ? fmtDuration(creative.video_duration) : '—';
+    const w = creative.width, h = creative.height;
+    const ratio = (w && h) ? `${w}×${h}` : '—';
+
+    // 미디어 영역
+    const mediaHtml = isVideo
+      ? `<video class="modal-video" src="${mediaUrl}" controls autoplay playsinline loop></video>`
+      : mediaUrl
+        ? `<img class="modal-image" src="${mediaUrl}" alt="creative">`
+        : `<div class="modal-no-media">미리보기 없음</div>`;
+
+    document.getElementById('modalMedia').innerHTML =
+      `<button class="modal-close" onclick="closeModal()">✕</button>${mediaHtml}`;
+
+    // 정보 영역
+    const iconHtml = appInfo?.icon_url
+      ? `<img class="modal-app-icon" src="${appInfo.icon_url}" alt="">`
+      : `<div class="modal-app-icon" style="background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:20px;">🎮</div>`;
+
+    document.getElementById('modalInfo').innerHTML = `
+      <div class="modal-app-row">
+        ${iconHtml}
+        <div>
+          <div class="modal-app-name">${appInfo?.name || '—'}</div>
+          <div class="modal-app-pub">${appInfo?.publisher_name || '—'}</div>
+        </div>
+      </div>
+
+      <div class="modal-meta-grid">
+        <div class="modal-meta-item">
+          <div class="modal-meta-label">유형</div>
+          <div class="modal-meta-value"><span class="creative-type-badge ${typeClass(type)}">${type}</span></div>
+        </div>
+        <div class="modal-meta-item">
+          <div class="modal-meta-label">재생시간</div>
+          <div class="modal-meta-value">${dur}</div>
+        </div>
+        <div class="modal-meta-item">
+          <div class="modal-meta-label">해상도</div>
+          <div class="modal-meta-value">${ratio}</div>
+        </div>
+        <div class="modal-meta-item">
+          <div class="modal-meta-label">포맷</div>
+          <div class="modal-meta-value">${(unit.ad_formats || []).join(', ') || '—'}</div>
+        </div>
+        <div class="modal-meta-item">
+          <div class="modal-meta-label">최초 노출</div>
+          <div class="modal-meta-value">${unit.first_seen_at || '—'}</div>
+        </div>
+        <div class="modal-meta-item">
+          <div class="modal-meta-label">최근 노출</div>
+          <div class="modal-meta-value">${unit.last_seen_at || '—'}</div>
+        </div>
+      </div>
+
+      <button class="modal-dl-btn" onclick="downloadByUrl('${encodeURIComponent(mediaUrl)}', '${encodeURIComponent((appInfo?.name||'creative')+'_'+unit.id)}')">
+        ⬇ 원본 다운로드
+      </button>
+    `;
+
+    document.getElementById('modalBackdrop').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    updateNavButtons();
+  }
+
+  // ── Modal Close ────────────────────────────────────────────
+  function closeModal(e) {
+    if (e) {
+      const backdrop = document.getElementById('modalBackdrop');
+      const wrapper  = document.getElementById('modalNavWrapper');
+      if (e.target !== backdrop && e.target !== wrapper) return;
+    }
+    const backdrop = document.getElementById('modalBackdrop');
+    const video = backdrop.querySelector('video');
+    if (video) { video.pause(); video.src = ''; }
+    backdrop.style.display = 'none';
+    document.body.style.overflow = '';
+    modalKeys = []; modalIdx = -1;
+  }
+
+  document.addEventListener('keydown', e => {
+    const isOpen = document.getElementById('modalBackdrop').style.display !== 'none';
+    if (e.key === 'Escape') { closeModal(); return; }
+    if (!isOpen) return;
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); navModal(-1); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); navModal(1);  }
+  });
+
+  // ── 공통 다운로드 유틸 (fetch+Blob → 확실한 파일 저장) ────
+  async function downloadByUrl(encodedUrl, encodedFilename) {
+    const url = decodeURIComponent(encodedUrl);
+    const filename = decodeURIComponent(encodedFilename) + '.mp4';
+    try {
+      const resp = await fetch(`/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch (e) {
+      console.error('Download failed', e);
+      showToast('다운로드 실패: ' + e.message);
+    }
+  }
+
+  // ── 개별 다운로드 ──────────────────────────────────────────
+  async function downloadCreative(key) {
+    const { creative, unit, appInfo } = creativeStore[key] || {};
+    if (!creative?.creative_url) return;
+    const filename = `${appInfo?.name || 'creative'}_${unit.id}`;
+    await downloadByUrl(encodeURIComponent(creative.creative_url), encodeURIComponent(filename));
+  }
+
+  // ── 전체 다운로드 ──────────────────────────────────────────
+  async function downloadAll(appId) {
+    const app = advertisers.find(a => a.app_id === appId);
+    if (!app) return;
+
+    // creativeStore에서 해당 앱 소재 전부 수집
+    const keys = Object.keys(creativeStore).filter(
+      k => creativeStore[k].appInfo?.app_id === appId && creativeStore[k].creative?.creative_url
+    );
+    if (!keys.length) return;
+
+    const btn = document.getElementById('dlAllBtn');
+    btn.disabled = true;
+
+    for (let i = 0; i < keys.length; i++) {
+      btn.textContent = `⬇ ${i + 1} / ${keys.length} 다운로드 중…`;
+      await downloadCreative(keys[i]);  // fetch 완료 후 다음으로 진행
+    }
+
+    btn.disabled = false;
+    btn.textContent = `✓ ${keys.length}개 완료`;
+    setTimeout(() => { btn.textContent = '⬇ 전체 다운로드'; }, 3000);
+  }
+</script>
+</body>
+</html>
