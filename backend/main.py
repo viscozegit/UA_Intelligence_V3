@@ -86,7 +86,8 @@ async def fetch_safe(platform, ad_types, network, country, category, date_str, l
 async def meta(platform: str = Query("ios")):
     """플랫폼별 유효한 네트워크·카테고리·ad_types 반환"""
     if platform == "all":
-        networks = sorted(set(IOS_NETWORKS) | set(ANDROID_NETWORKS))
+        # 우선순위 순서 유지하며 병합 (정렬하면 매체 우선순위가 깨짐)
+        networks = IOS_NETWORKS + [n for n in ANDROID_NETWORKS if n not in IOS_NETWORKS]
         categories = IOS_CATEGORIES   # label은 동일
     elif platform == "android":
         networks = ANDROID_NETWORKS
@@ -307,6 +308,9 @@ async def creative_history(unit_ids: str = Query(...)):
 # 누적 상위 소재 등급 → 최소 등장 주 수
 TIER_MIN_WEEKS = {"half": 24, "quarter": 12, "month": 4}
 
+# 네트워크 노출 우선순위 (파셋 칩 정렬용 — 집행 매체 우선)
+NETWORK_PRIORITY = {n: i for i, n in enumerate(IOS_NETWORKS)}
+
 
 @app.get("/api/cumulative-top")
 async def cumulative_top(
@@ -347,6 +351,9 @@ async def cumulative_top(
                     ) GROUP BY d ORDER BY 2 DESC""",
                 params + [min_weeks],
             ).fetchall()
+            if dim == "network":
+                # 네트워크는 건수가 아니라 매체 우선순위 순으로 노출
+                rows = sorted(rows, key=lambda r: NETWORK_PRIORITY.get(r[0], 99))
             total = conn.execute(
                 f"""{SNAP_CTE}
                     SELECT COUNT(*) FROM (

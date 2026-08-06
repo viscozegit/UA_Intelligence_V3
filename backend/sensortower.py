@@ -8,18 +8,17 @@ from typing import Optional
 BASE_URL = "https://api.sensortower.com/v1"
 UNIFIED_BASE_URL = "https://app.sensortower.com/api/unified"
 
-# 실제로 데이터가 반환되는 네트워크만 포함
-# (Adcolony·Tapjoy는 Digital Turbine 인수로 서비스 종료 — Sensor Tower에 소재 데이터 없음)
+# 실제로 데이터가 반환되는 네트워크만, 우리 집행 매체 우선순위 순으로 정렬
+# (Meta > Youtube > TikTok이 주력 매체. Applovin·Unity는 게임 UA 트렌드 조기 신호원으로 유지)
+# 제외: Adcolony·Tapjoy(서비스 종료), Chartboost(데이터 희박 + Meta와 unified 쿼터 경합)
 IOS_NETWORKS = [
-    "Admob", "Applovin", "Chartboost",
-    "Meta Audience Network",
-    "TikTok", "Unity", "Vungle", "Youtube",
+    "Meta Audience Network", "Youtube", "TikTok",
+    "Applovin", "Unity", "Admob", "Vungle",
 ]
 
 ANDROID_NETWORKS = [
-    "Admob", "Applovin", "Chartboost",
-    "Meta Audience Network",
-    "TikTok", "Unity", "Vungle", "Youtube",
+    "Meta Audience Network", "Youtube", "TikTok",
+    "Applovin", "Unity", "Admob", "Vungle",
 ]
 
 AD_TYPES = [
@@ -34,8 +33,8 @@ UNIFIED_AD_TYPES = [
 ]
 
 # unified 엔드포인트에서만 데이터가 반환되는 네트워크
-# (TikTok·Chartboost는 public creatives/top이 200 OK + 항상 0건 → unified 필수)
-UNIFIED_ONLY_NETWORKS = {"Meta Audience Network", "TikTok", "Chartboost"}
+# (TikTok은 public creatives/top이 200 OK + 항상 0건 → unified 필수)
+UNIFIED_ONLY_NETWORKS = {"Meta Audience Network", "TikTok"}
 
 # iOS: 숫자 카테고리 ID / Android: 문자열 카테고리 슬러그
 IOS_CATEGORIES = {

@@ -27,9 +27,10 @@ from sensortower import SensorTowerClient, UNIFIED_ONLY_NETWORKS  # noqa: E402
 DB_PATH = BASE_DIR / "snapshots.db"
 
 # ── 수집 범위 ────────────────────────────────────────────────
+# 우선순위 순 — Meta·TikTok(unified, 쿼터 제한)이 먼저 쿼터를 쓰도록 앞에 배치
 NETWORKS = [
-    "Admob", "Applovin", "Chartboost", "Meta Audience Network",
-    "TikTok", "Unity", "Vungle", "Youtube",
+    "Meta Audience Network", "TikTok",
+    "Youtube", "Applovin", "Unity", "Admob", "Vungle",
 ]
 COUNTRIES = ["US", "KR"]
 AD_TYPES = ["video", "image"]
@@ -191,9 +192,10 @@ async def main(n_weeks: int, concurrency: int = CONCURRENCY, pace: float = 0.0):
         sys.exit("SENSORTOWER_API_TOKEN이 없습니다 (backend/.env 확인)")
 
     weeks = mondays(n_weeks)
+    # 네트워크를 최외곽에 두어 우선순위 높은 매체(Meta 등)가 먼저 수집되도록 한다
     combos = [
         (w, p, n, c, a)
-        for w in weeks for p in PLATFORMS for n in NETWORKS
+        for n in NETWORKS for w in weeks for p in PLATFORMS
         for c in COUNTRIES for a in AD_TYPES
     ]
     done = done_combos(conn)

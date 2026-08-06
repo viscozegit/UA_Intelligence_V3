@@ -19,11 +19,11 @@ Sensor Tower 데이터를 기반으로 모바일 게임 광고 소재(Creative)�
 - 페이지당 소재 수 조절 가능 (기본 20개)
 - 페이지네이션
 
-### 지원 네트워크
-`Admob` `Applovin` `Chartboost` `Meta Audience Network` `TikTok` `Unity` `Vungle` `Youtube`
+### 지원 네트워크 (집행 매체 우선순위 순)
+`Meta Audience Network` `Youtube` `TikTok` `Applovin` `Unity` `Admob` `Vungle`
 
-> Meta Audience Network·TikTok·Chartboost는 Sensor Tower 내부 Unified API를 통해 데이터를 가져옵니다.
-> Adcolony·Tapjoy는 Digital Turbine 인수로 서비스가 종료되어 목록에서 제외했습니다.
+> Meta Audience Network·TikTok은 Sensor Tower 내부 Unified API를 통해 데이터를 가져옵니다.
+> Adcolony·Tapjoy(서비스 종료)·Chartboost(데이터 희박, Meta와 쿼터 경합)는 제외했습니다.
 
 ### 지원 광고 유형
 `video` `image` `banner` `full_screen` `playable` `interactive-playable`
