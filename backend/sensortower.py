@@ -8,17 +8,18 @@ from typing import Optional
 BASE_URL = "https://api.sensortower.com/v1"
 UNIFIED_BASE_URL = "https://app.sensortower.com/api/unified"
 
-# creatives/top 엔드포인트에서 실제로 지원되는 네트워크만 포함
+# 실제로 데이터가 반환되는 네트워크만 포함
+# (Adcolony·Tapjoy는 Digital Turbine 인수로 서비스 종료 — Sensor Tower에 소재 데이터 없음)
 IOS_NETWORKS = [
-    "Adcolony", "Admob", "Applovin", "Chartboost",
+    "Admob", "Applovin", "Chartboost",
     "Meta Audience Network",
-    "Tapjoy", "TikTok", "Unity", "Vungle", "Youtube",
+    "TikTok", "Unity", "Vungle", "Youtube",
 ]
 
 ANDROID_NETWORKS = [
-    "Adcolony", "Admob", "Applovin", "Chartboost",
+    "Admob", "Applovin", "Chartboost",
     "Meta Audience Network",
-    "Tapjoy", "TikTok", "Unity", "Vungle", "Youtube",
+    "TikTok", "Unity", "Vungle", "Youtube",
 ]
 
 AD_TYPES = [
@@ -32,8 +33,9 @@ UNIFIED_AD_TYPES = [
     "banner", "full_screen", "playable", "interactive-playable",
 ]
 
-# Meta Audience Network는 unified 엔드포인트만 지원
-UNIFIED_ONLY_NETWORKS = {"Meta Audience Network"}
+# unified 엔드포인트에서만 데이터가 반환되는 네트워크
+# (TikTok·Chartboost는 public creatives/top이 200 OK + 항상 0건 → unified 필수)
+UNIFIED_ONLY_NETWORKS = {"Meta Audience Network", "TikTok", "Chartboost"}
 
 # iOS: 숫자 카테고리 ID / Android: 문자열 카테고리 슬러그
 IOS_CATEGORIES = {
@@ -111,16 +113,26 @@ class SensorTowerClient:
         GET /api/unified/ad_intel/creatives/top
         Meta Audience Network 등 통합 엔드포인트에서만 지원되는 네트워크용.
         """
-        # 날짜 처리: YYYY-MM-DD → ISO8601 month 시작일
+        # 날짜 처리: period에 맞춰 시작일로 스냅
+        # month → 해당 월 1일 / week → 해당 주 월요일
         if date_str is None:
-            today = date.today()
-            # 이번 달 1일 기준
-            month_start = today.replace(day=1)
+            base = date.today()
         else:
             parts = date_str.split("-")
-            month_start = date(int(parts[0]), int(parts[1]), 1)
+            base = date(int(parts[0]), int(parts[1]), int(parts[2]) if len(parts) > 2 else 1)
 
-        iso_date = month_start.strftime("%Y-%m-%dT00:00:00.000Z")
+        if period == "week":
+            start = base - timedelta(days=base.weekday())
+        else:
+            start = base.replace(day=1)
+
+        iso_date = start.strftime("%Y-%m-%dT00:00:00.000Z")
+
+        # unified 엔드포인트는 iOS 숫자 카테고리 ID만 받는다
+        # → android slug가 들어오면 변환 (예: game_puzzle → 7011)
+        if not str(category).isdigit():
+            label = {v: k for k, v in ANDROID_CATEGORIES.items()}.get(str(category))
+            category = IOS_CATEGORIES.get(label, "6014") if label else "6014"
 
         # platform → devices 매핑
         if platform == "ios":

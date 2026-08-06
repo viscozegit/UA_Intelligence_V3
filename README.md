@@ -20,9 +20,10 @@ Sensor Tower 데이터를 기반으로 모바일 게임 광고 소재(Creative)�
 - 페이지네이션
 
 ### 지원 네트워크
-`Adcolony` `Admob` `Applovin` `Chartboost` `Meta Audience Network` `Tapjoy` `TikTok` `Unity` `Vungle` `Youtube`
+`Admob` `Applovin` `Chartboost` `Meta Audience Network` `TikTok` `Unity` `Vungle` `Youtube`
 
-> Meta Audience Network는 Sensor Tower 내부 Unified API를 통해 데이터를 가져옵니다.
+> Meta Audience Network·TikTok·Chartboost는 Sensor Tower 내부 Unified API를 통해 데이터를 가져옵니다.
+> Adcolony·Tapjoy는 Digital Turbine 인수로 서비스가 종료되어 목록에서 제외했습니다.
 
 ### 지원 광고 유형
 `video` `image` `banner` `full_screen` `playable` `interactive-playable`

@@ -6,6 +6,9 @@ backend/.env
 # Claude Code 로컬 설정 (API 키 히스토리 포함)
 .claude/
 
+# 스냅샷 DB (백필 데이터)
+backend/snapshots.db
+
 # Python
 __pycache__/
 *.pyc

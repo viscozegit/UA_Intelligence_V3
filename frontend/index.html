@@ -3,38 +3,75 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>UA Intelligence — Ad Creative Trend Report</title>
+  <title>UA Intelligence V3 — Ad Creative Trend Report</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg: #0f1117;
-      --surface: #1a1d27;
-      --surface2: #22263a;
-      --border: #2e3350;
+      /* 배경 계층 (깊이 순) */
+      --bg: #0d0f15;
+      --surface: #161923;
+      --surface2: #1e2230;
+      --surface3: #262b3d;            /* hover 상태 */
+      --border: #272c3f;
+      --border-strong: #3a4160;       /* hover·active 보더 */
+      /* 텍스트 계층 — WCAG AA(4.5:1) 이상 */
+      --text: #eef0f8;
+      --text-2: #b8bfd4;              /* 보조 텍스트 */
+      --muted: #8891a5;
+      --fg: var(--text);
+      /* 브랜드·시맨틱 */
       --accent: #6c63ff;
+      --accent-hover: #7f77ff;
       --accent2: #00d4aa;
-      --text: #e8eaf6;
-      --muted: #8892b0;
-      --danger: #ff6b6b;
-      --radius: 12px;
+      --success: #4ade80;
+      --info: #60a5fa;
+      --warn: #fbbf24;
+      --danger: #f87171;
+      /* 형태·모션 */
+      --radius: 10px;
+      --radius-sm: 7px;
+      --shadow-1: 0 1px 2px rgba(0,0,0,0.3);
+      --shadow-2: 0 4px 16px rgba(0,0,0,0.35);
+      --t: 180ms cubic-bezier(0.2, 0, 0, 1);
     }
 
-    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; min-height: 100vh; }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont,
+                   'Segoe UI', 'Noto Sans KR', system-ui, sans-serif;
+      font-size: 14px; min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    /* 키보드 포커스 가시화 (마우스 클릭에는 링 없음) */
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+    button { font-family: inherit; }
+
+    /* 스크롤바 — 다크 테마에 맞춘 절제형 */
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 5px; border: 2px solid var(--bg); }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+    ::-webkit-scrollbar-track { background: transparent; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+    }
 
     /* ── Header ── */
     header {
       background: var(--surface);
       border-bottom: 1px solid var(--border);
-      padding: 14px 24px;
+      padding: 13px 24px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       position: sticky; top: 0; z-index: 100;
     }
-    .logo { font-size: 17px; font-weight: 700; }
+    .logo { font-size: 16px; font-weight: 800; letter-spacing: -0.01em; }
     .logo span { color: var(--accent); }
-    .header-meta { font-size: 11px; color: var(--muted); }
+    .header-meta { font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
 
     /* ── Layout ── */
     .layout {
@@ -43,6 +80,8 @@
       height: calc(100vh - 53px);
       overflow: hidden;
     }
+    /* 누적 상위 소재 탭: 사이드바 없이 전체 폭 사용 */
+    .layout.no-sidebar { grid-template-columns: 1fr; }
 
     /* ── Sidebar ── */
     .sidebar { border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
@@ -66,7 +105,7 @@
       border-radius: 7px;
       font-size: 12px;
       outline: none;
-      transition: border-color 0.2s;
+      transition: border-color var(--t);
     }
     select:focus { border-color: var(--accent); }
 
@@ -79,7 +118,7 @@
       font-size: 12px;
       cursor: pointer;
       text-align: left;
-      transition: border-color 0.2s;
+      transition: border-color var(--t);
       white-space: nowrap;
       display: flex;
       align-items: center;
@@ -267,6 +306,177 @@
       text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;
     }
 
+    /* ── 누적 상위 소재: 필터 바 + 통계 라인 ── */
+    .cum-bar {
+      padding: 12px 16px 10px; border-bottom: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: 8px; flex-shrink: 0;
+    }
+    .facet-row { display: flex; align-items: baseline; gap: 10px; }
+    .facet-row.facet-inline { flex-wrap: wrap; gap: 8px 22px; }
+    .facet-group { display: flex; align-items: baseline; gap: 10px; }
+    .facet-label {
+      font-size: 11px; color: var(--muted); font-weight: 600;
+      min-width: 48px; flex-shrink: 0;
+    }
+    .facet-inline .facet-label { min-width: 0; }
+    .facet-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+    .chip-btn {
+      background: var(--surface2); color: var(--muted);
+      border: 1px solid var(--border); border-radius: 999px;
+      padding: 3px 10px; font-size: 11px; cursor: pointer;
+      transition: all var(--t); white-space: nowrap;
+    }
+    .chip-btn b { font-weight: 700; opacity: 0.55; margin-left: 2px; }
+    .chip-btn:hover { color: var(--fg); border-color: var(--accent); }
+    .chip-btn.active {
+      background: var(--accent); color: #fff; border-color: var(--accent);
+    }
+    .chip-btn.active b { opacity: 0.75; }
+
+    .tier-toggle {
+      display: flex; gap: 8px; justify-content: center;
+      margin: 2px 0 10px;
+    }
+    .tier-btn {
+      background: var(--surface2); color: var(--muted);
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 9px 26px; font-size: 14px; font-weight: 700; cursor: pointer;
+      letter-spacing: 0.2px; transition: all var(--t);
+    }
+    .tier-btn:hover { color: var(--fg); border-color: var(--accent); }
+    .tier-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    .tc-stats {
+      padding: 0 10px 9px; font-size: 10.5px; color: var(--muted);
+      display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+    }
+    .tc-stats .cont-yes { color: var(--success); font-weight: 700; }
+    .tc-stats .cont-no  { color: #8b93a7; }
+
+    /* ── 주간 브리핑: 리포트 카드 ── */
+    .report {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+      margin: 4px 0 24px;
+    }
+    .report-block {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 14px 16px 16px;
+      box-shadow: var(--shadow-1);
+    }
+    .report-block.wide { grid-column: 1 / -1; }
+    .report-title {
+      font-size: 12px; font-weight: 700; margin-bottom: 12px;
+      text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .report-title::before {
+      content: ''; width: 3px; height: 12px; border-radius: 2px;
+      background: var(--accent); display: inline-block;
+    }
+    .report-block.wide .report-title::before { background: var(--warn); }
+
+    .must-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 9px; }
+    .must-card {
+      display: flex; gap: 10px; align-items: flex-start; cursor: pointer;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 10px 8px 8px; transition: border-color var(--t);
+    }
+    .must-card:hover { border-color: var(--accent); }
+    .must-no {
+      flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
+      background: var(--accent); color: #fff; font-size: 11px; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .must-thumb {
+      position: relative; flex-shrink: 0; width: 42px; height: 56px;
+      border-radius: 5px; overflow: hidden; background: var(--bg);
+    }
+    .must-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .tc-play.sm {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+      width: 18px; height: 18px; font-size: 8px;
+    }
+    .must-body { min-width: 0; }
+    .must-app { font-size: 12.5px; font-weight: 700; }
+    .must-reason { font-size: 11px; color: var(--info); margin-top: 2px; line-height: 1.35; }
+    .must-meta { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+    .must-hook { display: flex; align-items: center; gap: 5px; margin-top: 6px; }
+    .hook-chip {
+      font-size: 10px; font-weight: 700; color: #d4b0ff;
+      background: rgba(160,100,255,0.13); border: 1px solid rgba(160,100,255,0.35);
+      border-radius: 4px; padding: 1px 6px;
+    }
+    .conf-tag { font-size: 9px; font-weight: 700; color: var(--muted); }
+    .conf-tag.conf-high { color: var(--success); }
+    .conf-tag.conf-low  { color: var(--danger); }
+    .must-why {
+      font-size: 11px; color: var(--fg); opacity: 0.82; line-height: 1.45; margin-top: 4px;
+    }
+
+    .mover-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .mover-head { font-size: 11px; color: var(--muted); font-weight: 700; margin-bottom: 6px; }
+    .mover { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; font-size: 12px; }
+    .mover-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mover-num { flex-shrink: 0; color: var(--muted); font-size: 11px; }
+    .mover-num.up b { color: var(--success); }
+    .mover-num.down b { color: var(--danger); }
+
+    .anomaly { font-size: 12px; line-height: 1.6; }
+    .anomaly.none { color: var(--muted); }
+    .anomaly b.up { color: var(--warn); }
+    .anomaly b.down { color: var(--danger); }
+    .anomaly-note {
+      font-size: 10px; color: var(--muted); border: 1px solid var(--border);
+      border-radius: 4px; padding: 1px 5px; margin-left: 4px;
+    }
+
+    /* ── 주간 브리핑 ── */
+    .brief-bar { padding-bottom: 12px; }
+    .brief-week-row { display: flex; align-items: center; gap: 10px; }
+    .brief-week-sel {
+      background: var(--surface2); color: var(--fg);
+      border: 1px solid var(--border); border-radius: 6px;
+      padding: 6px 10px; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .brief-scroll { overflow-y: auto; padding: 4px 16px 20px; }
+    .brief-section { margin-bottom: 26px; }
+    .brief-head {
+      display: flex; align-items: baseline; gap: 8px;
+      padding: 8px 0 10px; border-bottom: 1px solid var(--border); margin-bottom: 12px;
+    }
+    .brief-title { font-size: 15px; font-weight: 800; }
+    .brief-count {
+      font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px;
+      background: var(--surface2); color: var(--muted);
+    }
+    .brief-desc { font-size: 11.5px; color: var(--muted); }
+    .sec-new  .brief-title { color: var(--success); }
+    .sec-rise .brief-title { color: var(--info); }
+    .sec-long .brief-title { color: var(--warn); }
+    .sec-drop .brief-title { color: var(--danger); }
+    .brief-empty { color: var(--muted); font-size: 12px; padding: 6px 0 2px; }
+    .brief-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px;
+    }
+    .brief-card .tc-thumb-wrap { aspect-ratio: 9/16; }
+    .brief-metric {
+      padding: 0 10px 9px; font-size: 11px; color: var(--muted);
+      display: flex; align-items: center; gap: 5px;
+    }
+    .brief-delta { color: var(--info); font-weight: 800; }
+    .brief-sub { color: var(--muted); }
+
+    /* ── 수명 뱃지 (상위권 등장 주수 등급) ── */
+    .life-badge {
+      display: none; font-size: 10px; font-weight: 700;
+      padding: 2px 6px; border-radius: 4px; margin-left: 4px;
+      vertical-align: middle; white-space: nowrap;
+    }
+    .life-badge.half    { display: inline-block; background: rgba(255,193,7,0.15);  color: var(--warn); border: 1px solid rgba(255,193,7,0.4); }
+    .life-badge.quarter { display: inline-block; background: rgba(190,205,225,0.14); color: #becde1; border: 1px solid rgba(190,205,225,0.38); }
+    .life-badge.month   { display: inline-block; background: rgba(205,127,50,0.15);  color: #cf9868; border: 1px solid rgba(205,127,50,0.42); }
+    .life-badge.fresh   { display: inline-block; background: rgba(80,220,120,0.14);  color: var(--success); border: 1px solid rgba(80,220,120,0.38); }
+
     /* ── Creatives Grid ── */
     .creatives-grid {
       display: grid;
@@ -277,7 +487,7 @@
     .creative-card {
       background: var(--surface); border: 1px solid var(--border);
       border-radius: var(--radius); overflow: hidden; cursor: pointer;
-      transition: border-color 0.2s, transform 0.15s;
+      transition: border-color var(--t), transform var(--t);
       position: relative;
     }
     .creative-card:hover { border-color: var(--accent); transform: translateY(-2px); }
@@ -316,7 +526,7 @@
       padding: 7px 14px; border-radius: 8px;
       background: var(--surface2); border: 1px solid var(--border);
       color: var(--text); font-size: 12px; font-weight: 600;
-      cursor: pointer; transition: border-color 0.2s, color 0.2s;
+      cursor: pointer; transition: border-color var(--t), color 0.2s;
       display: flex; align-items: center; gap: 5px; white-space: nowrap;
     }
     .btn-dl-all:hover { border-color: var(--accent2); color: var(--accent2); }
@@ -470,22 +680,21 @@
       background: var(--surface2); border: 1px solid var(--border);
       color: var(--text); font-size: 13px; font-weight: 600;
       text-decoration: none; cursor: pointer;
-      transition: border-color 0.2s;
+      transition: border-color var(--t);
       gap: 6px;
     }
     .modal-dl-btn:hover { border-color: var(--accent); color: var(--accent); }
 
     /* ── Tab Nav ── */
-    .tab-nav { display: flex; gap: 2px; }
+    .tab-nav { display: flex; gap: 4px; }
     .tab-btn {
-      padding: 7px 18px; border-radius: 7px;
+      padding: 7px 16px; border-radius: var(--radius-sm);
       font-size: 13px; font-weight: 600;
-      background: none; border: none; color: var(--muted);
-      cursor: pointer; transition: color 0.15s, background 0.15s;
-      border-bottom: 2px solid transparent;
+      background: none; border: none; color: var(--text-2);
+      cursor: pointer; transition: color var(--t), background var(--t);
     }
-    .tab-btn:hover { color: var(--text); }
-    .tab-btn.active { color: var(--text); border-bottom-color: var(--accent); }
+    .tab-btn:hover { color: var(--text); background: var(--surface2); }
+    .tab-btn.active { color: #fff; background: var(--accent); }
 
     /* ── Top Creatives ── */
     .tc-main { display: flex; flex-direction: column; overflow: hidden; }
@@ -519,9 +728,13 @@
       border: 1px solid var(--border);
       border-radius: var(--radius);
       overflow: hidden; cursor: pointer; position: relative;
-      transition: border-color 0.15s, transform 0.1s;
+      transition: border-color var(--t), transform var(--t), box-shadow var(--t);
     }
-    .tc-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .tc-card:hover {
+      border-color: var(--border-strong);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-2);
+    }
 
     .tc-rank {
       position: absolute; top: 10px; left: 10px; z-index: 2;
@@ -580,7 +793,7 @@
       min-width: 32px; height: 32px; padding: 0 8px;
       border-radius: 7px; border: 1px solid var(--border);
       background: var(--surface); color: var(--text);
-      font-size: 12px; cursor: pointer; transition: all 0.15s;
+      font-size: 12px; cursor: pointer; transition: all var(--t);
       display: flex; align-items: center; justify-content: center;
     }
     .pg-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
@@ -602,10 +815,12 @@
 <body>
 
 <header>
-  <div class="logo">UA <span>Intelligence</span></div>
+  <div class="logo">UA <span>Intelligence</span> V3</div>
   <div class="tab-nav">
     <button class="tab-btn active" id="tab-gameUA" onclick="switchTab('gameUA')">게임 UA</button>
     <button class="tab-btn" id="tab-topCreatives" onclick="switchTab('topCreatives')">상위 소재</button>
+    <button class="tab-btn" id="tab-cumulative" onclick="switchTab('cumulative')">누적 상위 소재</button>
+    <button class="tab-btn" id="tab-brief" onclick="switchTab('brief')">주간 브리핑</button>
   </div>
   <div class="header-meta" id="headerMeta">Sensor Tower Ad Intelligence</div>
 </header>
@@ -722,6 +937,21 @@
     document.getElementById(`tab-${tab}`).classList.add('active');
 
     const advertiserList   = document.getElementById('advertiserList');
+
+    const sidebar = document.querySelector('.sidebar');
+    const layout  = document.querySelector('.layout');
+
+    if (tab === 'cumulative' || tab === 'brief') {
+      // 로컬 DB만 조회 → 사이드바 없이 즉시 조회 (센서타워 호출 없음)
+      sidebar.style.display = 'none';
+      layout.classList.add('no-sidebar');
+      advertiserList.style.display = 'none';
+      document.getElementById('mainContent').className = 'main tc-main';
+      tab === 'brief' ? fetchBrief() : fetchCumulative();
+      return;
+    }
+    sidebar.style.display = '';
+    layout.classList.remove('no-sidebar');
 
     if (tab === 'topCreatives') {
       advertiserList.style.display = 'none';
@@ -928,6 +1158,12 @@
     if (activeTab === 'topCreatives') {
       await fetchTopCreatives(); return;
     }
+    if (activeTab === 'cumulative') {
+      await fetchCumulative(); return;
+    }
+    if (activeTab === 'brief') {
+      await fetchBrief(); return;
+    }
     setBtn(true);
     selectedAppId = null;
 
@@ -955,6 +1191,10 @@
       const data = await res.json();
       advertisers = data.advertisers || [];
       allAdUnits = advertisers.flatMap(a => a.ad_units || []);
+
+      if (data.failed_calls > 0) {
+        showToast(`${data.failed_calls}개 호출 실패 (${(data.errors || [])[0] || ''}) — 결과가 불완전할 수 있습니다`);
+      }
 
       const network = document.getElementById('network').value;
       const weekLabel = document.getElementById('weekBtnLabel').textContent;
@@ -996,10 +1236,260 @@
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail || `HTTP ${res.status}`); }
       const data = await res.json();
       const list = data.creatives || [];
+      if (data.failed_calls > 0) {
+        showToast(`${data.failed_calls}개 호출 실패 (${(data.errors || [])[0] || ''}) — 결과가 불완전할 수 있습니다`);
+      }
       const weekLabel = document.getElementById('weekBtnLabel').textContent;
       document.getElementById('headerMeta').textContent =
         `${document.getElementById('network').value} · ${weekLabel} · 상위 소재 ${list.length}개`;
       renderTopCreatives(list);
+    } catch (e) {
+      showToast(e.message);
+      main.innerHTML = `<div class="state-box"><div class="icon">⚠️</div><p>${e.message}</p></div>`;
+    } finally {
+      setBtn(false);
+    }
+  }
+
+  // ── 누적 상위 소재 (스냅샷 DB 기반) ──────────────────────────
+  const TIER_LABEL = { half: '반기 TOP', quarter: '분기 TOP', month: '월간 TOP' };
+  const DIM_LABEL  = { network: '네트워크', country: '국가', platform: '플랫폼', ad_type: '유형' };
+  const VAL_LABEL  = { ios: 'iOS', android: 'Android', video: 'Video', image: 'Image' };
+
+  let cumTier = 'half';
+  let cumSel  = { network: 'all', country: 'all', platform: 'all', ad_type: 'all' };
+
+  function setCumTier(t) {
+    if (t === cumTier) return;
+    cumTier = t;
+    fetchCumulative();
+  }
+
+  function setCumFilter(dim, val) {
+    if (cumSel[dim] === val) return;
+    cumSel[dim] = val;
+    fetchCumulative();
+  }
+
+  // 등급 토글 + 차원별 칩 필터 (수집된 값만 노출 → 빈 결과 선택 자체가 불가능)
+  function cumBarHtml(facets = {}) {
+    const tiers = Object.entries(TIER_LABEL).map(([k, v]) =>
+      `<button class="tier-btn ${k === cumTier ? 'active' : ''}" onclick="setCumTier('${k}')">${v}</button>`
+    ).join('');
+
+    // 차원 하나의 라벨 + 칩 묶음
+    const group = dim => {
+      const f = facets[dim];
+      if (!f || !f.values?.length) return '';
+      const chips = [`<button class="chip-btn ${cumSel[dim] === 'all' ? 'active' : ''}"
+          onclick="setCumFilter('${dim}','all')">전체 <b>${f.all}</b></button>`]
+        .concat(f.values.map(v =>
+          `<button class="chip-btn ${cumSel[dim] === v.value ? 'active' : ''}"
+            onclick="setCumFilter('${dim}','${String(v.value).replace(/'/g, "\\'")}')">
+            ${VAL_LABEL[v.value] || v.value} <b>${v.count}</b></button>`));
+      return `<div class="facet-group"><span class="facet-label">${DIM_LABEL[dim]}</span>
+        <div class="facet-chips">${chips.join('')}</div></div>`;
+    };
+
+    // 네트워크는 값이 많아 단독 행, 나머지 셋은 한 행에 나란히
+    const netRow    = group('network');
+    const inlineRow = ['country', 'platform', 'ad_type'].map(group).join('');
+
+    return `<div class="cum-bar">
+      <div class="tier-toggle">${tiers}</div>
+      ${netRow ? `<div class="facet-row">${netRow}</div>` : ''}
+      ${inlineRow ? `<div class="facet-row facet-inline">${inlineRow}</div>` : ''}
+    </div>`;
+  }
+
+  function injectCumBar(facets) {
+    document.getElementById('mainContent')
+      .insertAdjacentHTML('afterbegin', cumBarHtml(facets));
+  }
+
+  async function fetchCumulative() {
+    setBtn(true);
+    const main = document.getElementById('mainContent');
+    main.className = 'main tc-main';
+    main.innerHTML = '<div class="state-box"><div class="spinner"></div><p>누적 데이터 집계 중…</p></div>';
+
+    const params = new URLSearchParams({
+      tier:     cumTier,
+      network:  cumSel.network,
+      country:  cumSel.country,
+      platform: cumSel.platform,
+      ad_types: cumSel.ad_type,
+      limit: 300,
+    });
+
+    try {
+      const res = await fetch(`/api/cumulative-top?${params}`);
+      if (!res.ok) { const e = await res.json(); throw new Error(e.detail || `HTTP ${res.status}`); }
+      const data = await res.json();
+      const list = data.creatives || [];
+      document.getElementById('headerMeta').textContent =
+        `${TIER_LABEL[cumTier]} · ${data.min_weeks}주 이상 등장 · ${list.length}개 소재`;
+      renderTopCreatives(list, `${data.min_weeks}주 이상 등장한 소재 ${list.length}개`);
+      injectCumBar(data.facets);
+    } catch (e) {
+      showToast(e.message);
+      main.innerHTML = `<div class="state-box"><div class="icon">⚠️</div><p>${e.message}</p></div>`;
+      injectCumBar({});
+    } finally {
+      setBtn(false);
+    }
+  }
+
+  // ── 주간 브리핑 ─────────────────────────────────────────────
+  const BRIEF_SECTIONS = [
+    { key: 'new',     title: '신규 진입',  desc: '이번 주 처음 등장 — 경쟁사가 지금 테스트 중',        cls: 'sec-new' },
+    { key: 'rising',  title: '급상승',    desc: '지난주 대비 20위 이상 상승 — 스케일업 중',          cls: 'sec-rise' },
+    { key: 'longrun', title: '롱런 진입',  desc: '이번 주 4주차 돌파 — 성과 검증 완료',              cls: 'sec-long' },
+    { key: 'dropped', title: '이탈',      desc: '4주 이상 돌던 소재가 이번 주 사라짐 — 수명 종료',     cls: 'sec-drop' },
+  ];
+  let briefWeek = null;
+
+  function setBriefWeek(w) { briefWeek = w; fetchBrief(); }
+
+  function briefCardHtml(item, key) {
+    const { creative, unit, app_info: appInfo, pct } = item;
+    const type = unit.ad_type || '';
+    const isVideo = type.includes('video');
+    const thumb = creative.thumb_url || '';
+    // 섹션별 강조 지표 (순위는 조합마다 모수가 달라 백분위로 표시)
+    const extra = item.delta != null
+      ? `<span class="brief-delta">▲${item.delta}%p</span> <span class="brief-sub">${item.prev_pct}%→${pct}%</span>`
+      : item.weeks != null
+        ? `<span class="brief-sub">${item.weeks}주 유지</span>`
+        : `<span class="brief-sub">상위 ${pct}% 진입</span>`;
+
+    return `
+      <div class="tc-card brief-card" onclick="openCreativeModal('${key}')">
+        <div class="tc-rank ${pct <= 5 ? 'top3' : ''}">상위 ${pct}%</div>
+        <div class="tc-thumb-wrap">
+          ${thumb ? `<img src="${thumb}" alt="" loading="lazy">` : '<div class="tc-thumb-ph">🖼️</div>'}
+          ${isVideo ? '<div class="tc-play">▶</div>' : ''}
+        </div>
+        <div class="tc-app-row">
+          ${appInfo?.icon_url
+            ? `<img class="tc-app-icon" src="${appInfo.icon_url}" alt="" onerror="this.style.display='none'">`
+            : `<div class="tc-app-icon-ph">🎮</div>`}
+          <div class="tc-app-text">
+            <div class="tc-app-name" title="${appInfo?.name || ''}">${appInfo?.name || '—'}</div>
+            <div class="tc-app-pub">${unit.network || ''} · ${unit.country || ''}</div>
+          </div>
+        </div>
+        <div class="brief-metric">${extra}</div>
+      </div>`;
+  }
+
+  async function fetchBrief() {
+    setBtn(true);
+    const main = document.getElementById('mainContent');
+    main.className = 'main tc-main';
+    main.innerHTML = '<div class="state-box"><div class="spinner"></div><p>주간 변화 계산 중…</p></div>';
+
+    try {
+      const qs = briefWeek ? `?week=${briefWeek}` : '';
+      const res = await fetch(`/api/weekly-brief${qs}`);
+      if (!res.ok) { const e = await res.json(); throw new Error(e.detail || `HTTP ${res.status}`); }
+      const data = await res.json();
+      if (!data.week) { main.innerHTML = '<div class="state-box"><div class="icon">📭</div><p>수집된 데이터가 없습니다</p></div>'; return; }
+      briefWeek = data.week;
+
+      const weekSel = `<select class="brief-week-sel" onchange="setBriefWeek(this.value)">` +
+        data.weeks.map(w => `<option value="${w}" ${w === data.week ? 'selected' : ''}>${w} 주</option>`).join('') +
+        `</select>`;
+
+      // ── 리포트 카드 (꼭 봐야 할 소재 / 움직인 광고주 / 이상 신호) ──
+      const rep = data.report || {};
+      const mustCards = (rep.must_watch || []).map((it, i) => {
+        const key = `must_${it.unit.id}`;
+        creativeStore[key] = { creative: it.creative, unit: it.unit, appInfo: it.app_info };
+        const thumb = it.creative.thumb_url || '';
+        return `
+          <div class="must-card" onclick="openCreativeModal('${key}')">
+            <div class="must-no">${i + 1}</div>
+            <div class="must-thumb">${thumb
+              ? `<img src="${thumb}" alt="" loading="lazy">` : '<div class="tc-thumb-ph">🖼️</div>'}
+              ${(it.unit.ad_type || '').includes('video') ? '<div class="tc-play sm">▶</div>' : ''}</div>
+            <div class="must-body">
+              <div class="must-app">${it.app_info?.name || '—'}</div>
+              <div class="must-reason">${it.reason || ''}</div>
+              <div class="must-meta">${it.unit.network || ''} · ${it.unit.country || ''}</div>
+              ${it.analysis ? `
+                <div class="must-hook"><span class="hook-chip">${it.analysis.hook_type}</span>
+                  <span class="conf-tag conf-${it.analysis.confidence}">${it.analysis.confidence}</span></div>
+                <div class="must-why" title="${(it.analysis.visual_summary || '').replace(/"/g, '&quot;')}">
+                  ${it.analysis.why_hypothesis || ''}</div>` : ''}
+            </div>
+          </div>`;
+      }).join('');
+
+      const moverRow = (m, up) => `
+        <div class="mover">
+          <span class="mover-name" title="${m.name}">${m.name}</span>
+          <span class="mover-num ${up ? 'up' : 'down'}">${m.prev} → ${m.cur}
+            <b>${m.delta > 0 ? '+' : ''}${m.delta}</b></span>
+        </div>`;
+
+      const anomalyHtml = (rep.anomalies || []).length
+        ? rep.anomalies.map(a =>
+            `<div class="anomaly">${a.label} <b>${a.now.toLocaleString()}</b>
+             — 직전 4주 평균 ${a.base.toLocaleString()} 대비
+             <b class="${a.dev > 0 ? 'up' : 'down'}">${a.dev > 0 ? '+' : ''}${a.dev}%</b>
+             <span class="anomaly-note">원인 확인 필요</span></div>`).join('')
+        : `<div class="anomaly none">직전 4주 평균 대비 특이사항 없음</div>`;
+
+      const reportHtml = `
+        <div class="report">
+          <div class="report-block wide">
+            <div class="report-title">이번 주 꼭 봐야 할 소재</div>
+            ${mustCards ? `<div class="must-list">${mustCards}</div>`
+                        : `<div class="brief-empty">기준을 충족한 소재 없음</div>`}
+          </div>
+          <div class="report-block">
+            <div class="report-title">이번 주 움직인 광고주</div>
+            <div class="mover-cols">
+              <div><div class="mover-head">소재 급증</div>
+                ${(rep.movers_up || []).map(m => moverRow(m, true)).join('') || '<div class="brief-empty">—</div>'}</div>
+              <div><div class="mover-head">소재 급감</div>
+                ${(rep.movers_down || []).map(m => moverRow(m, false)).join('') || '<div class="brief-empty">—</div>'}</div>
+            </div>
+          </div>
+          <div class="report-block">
+            <div class="report-title">이상 신호</div>
+            ${anomalyHtml}
+          </div>
+        </div>`;
+
+      const body = reportHtml + BRIEF_SECTIONS.map(sec => {
+        const items = data.sections[sec.key] || [];
+        const cards = items.map(it => {
+          const key = `brief_${sec.key}_${it.unit.id}`;
+          creativeStore[key] = { creative: it.creative, unit: it.unit, appInfo: it.app_info };
+          return briefCardHtml(it, key);
+        }).join('');
+        return `
+          <section class="brief-section">
+            <div class="brief-head ${sec.cls}">
+              <span class="brief-title">${sec.title}</span>
+              <span class="brief-count">${items.length}</span>
+              <span class="brief-desc">${sec.desc}</span>
+            </div>
+            ${items.length
+              ? `<div class="brief-grid">${cards}</div>`
+              : `<div class="brief-empty">해당 소재 없음</div>`}
+          </section>`;
+      }).join('');
+
+      document.getElementById('headerMeta').textContent = `주간 브리핑 · ${data.week} 주`;
+      main.innerHTML = `
+        <div class="cum-bar brief-bar">
+          <div class="brief-week-row"><span class="facet-label">기준 주</span>${weekSel}</div>
+        </div>
+        <div class="tc-scroll brief-scroll">${body}</div>`;
+      annotateLifetime();
     } catch (e) {
       showToast(e.message);
       main.innerHTML = `<div class="state-box"><div class="icon">⚠️</div><p>${e.message}</p></div>`;
@@ -1013,9 +1503,11 @@
   let tcAllKeys   = [];   // 전체 key 순서 (모달 nav 용)
   let tcPage      = 1;
   let tcPerPage   = 20;
+  let tcInfoText  = '';   // 결과 헤더 문구 (누적 탭에서 커스텀)
 
   // ── Top Creatives Render (전체 저장 후 1페이지 렌더) ──────
-  function renderTopCreatives(list) {
+  function renderTopCreatives(list, infoText = '') {
+    tcInfoText = infoText;
     const main = document.getElementById('mainContent');
     if (!list.length) {
       main.innerHTML = '<div class="state-box"><div class="icon">🔍</div><p>결과 없음</p></div>';
@@ -1064,11 +1556,11 @@
 
     // 결과 정보
     document.getElementById('tcResultInfo').textContent =
-      `총 ${total}개 소재 · ${start + 1}–${Math.min(start + tcPerPage, total)} 표시`;
+      `${tcInfoText || `총 ${total}개 소재`} · ${start + 1}–${Math.min(start + tcPerPage, total)} 표시`;
 
     // 카드 그리드
     const cards = slice.map(item => {
-      const { creative, unit, app_info: appInfo, rank, _key: key } = item;
+      const { creative, unit, app_info: appInfo, rank, _key: key, stats } = item;
       const thumb   = creative.thumb_url || '';
       const type    = unit.ad_type || '';
       const isVideo = type.includes('video');
@@ -1101,7 +1593,12 @@
             ${type ? `<span class="tc-badge creative-type-badge ${typeClass(type)}">${type}</span>` : ''}
             ${net  ? `<span class="tc-badge">${net}</span>` : ''}
             ${ctry ? `<span class="tc-badge">${ctry}</span>` : ''}
+            <span class="life-badge" data-life-uid="${unit.id || ''}"></span>
           </div>
+          ${stats ? `<div class="tc-stats" title="${stats.first_week} ~ ${stats.last_week}">
+            ${stats.weeks}주 등장 · 최고 상위 ${stats.best_pct}% · 평균 상위 ${stats.avg_pct}%
+            <span class="${stats.consecutive ? 'cont-yes' : 'cont-no'}">${stats.consecutive ? '연속' : '간헐'}</span>
+          </div>` : ''}
         </div>`;
     }).join('');
 
@@ -1120,6 +1617,9 @@
         downloadCreative(sliceKeys[i]);
       };
     });
+
+    // 수명 뱃지 채우기
+    annotateLifetime();
 
     // 페이지네이션 버튼
     document.getElementById('tcPagination').innerHTML = buildPagination(tcPage, pages);
@@ -1239,6 +1739,39 @@
         </div>
       </div>
     `;
+    annotateLifetime();
+  }
+
+  // ── 수명 뱃지 (스냅샷 DB 기반 top100 잔류 주수) ──────────────
+  const lifetimeCache = {};   // unit_id → history 또는 null(이력 없음)
+
+  async function annotateLifetime() {
+    const spans = [...document.querySelectorAll('.life-badge[data-life-uid]')]
+      .filter(s => s.dataset.lifeUid && !s.dataset.done);
+    if (!spans.length) return;
+
+    const need = [...new Set(spans.map(s => s.dataset.lifeUid))]
+      .filter(id => !(id in lifetimeCache));
+    if (need.length) {
+      try {
+        const res = await fetch(`/api/creative-history?unit_ids=${need.join(',')}`);
+        const { history = {} } = await res.json();
+        need.forEach(id => { lifetimeCache[id] = history[id] || null; });
+      } catch { return; }  // 이력 조회 실패는 조용히 무시 (뱃지만 생략)
+    }
+
+    spans.forEach(s => {
+      s.dataset.done = '1';
+      const h = lifetimeCache[s.dataset.lifeUid];
+      if (!h) return;  // 수집 범위 밖(네트워크/국가) 소재는 뱃지 없음
+      // 등급: 반기(24주+) / 분기(12주+) / 월간(4주+) — 3주 이하는 뱃지 없음
+      if (h.weeks >= 24)      { s.textContent = '반기 TOP'; s.classList.add('half'); }
+      else if (h.weeks >= 12) { s.textContent = '분기 TOP'; s.classList.add('quarter'); }
+      else if (h.weeks >= 4)  { s.textContent = '월간 TOP'; s.classList.add('month'); }
+      else if (h.weeks === 1) { s.textContent = '신규';     s.classList.add('fresh'); }
+      else return;   // 2~3주는 아직 판단 유보 구간
+      s.title = `상위권 등장 ${h.weeks}주 (${h.first_week} ~ ${h.last_week}) · 최고 상위 ${h.best_pct}%`;
+    });
   }
 
   // ── Creative Store (카드 클릭 시 데이터 전달용) ──────────────
@@ -1266,7 +1799,7 @@
           ${dur ? `<div class="duration-badge">${dur}</div>` : ''}
         </div>
         <div class="creative-info">
-          <span class="creative-type-badge ${typeClass(type)}">${type}</span>
+          <span class="creative-type-badge ${typeClass(type)}">${type}</span><span class="life-badge" data-life-uid="${unit.id || ''}"></span>
           <div class="creative-formats">${(unit.ad_formats || []).join(', ') || '—'}</div>
           <div class="creative-dates">${unit.first_seen_at || ''} ~ ${unit.last_seen_at || ''}</div>
         </div>
