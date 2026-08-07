@@ -46,6 +46,17 @@ CREATE TABLE IF NOT EXISTS app_sov (
     PRIMARY KEY (app_id, network, country, week)
 );
 CREATE INDEX IF NOT EXISTS idx_sov_app ON app_sov(app_id, week);
+
+CREATE TABLE IF NOT EXISTS app_downloads (
+    app_id     TEXT NOT NULL,     -- 스냅샷의 app_id 그대로 (hex여도 이 키로 저장 → 조인 일관성)
+    country    TEXT NOT NULL,
+    week       TEXT NOT NULL,
+    downloads  INTEGER,           -- 주간 설치 추정 (iphone+ipad 또는 android 합)
+    revenue    INTEGER,           -- 주간 매출 추정 (센트)
+    fetched_at TEXT,
+    PRIMARY KEY (app_id, country, week)
+);
+CREATE INDEX IF NOT EXISTS idx_dl_app ON app_downloads(app_id, week);
 """
 
 
@@ -86,6 +97,67 @@ def pick_target_apps(conn, latest_week: str) -> list[str]:
         if a and a not in out:
             out.append(a)
     return out[:20]
+
+
+async def resolve_unified(client, hex_id: str):
+    """unified hex app_id → [(os, store_app_id), ...] 변환"""
+    try:
+        r = await client.get("https://api.sensortower.com/v1/unified/apps",
+            params={"auth_token": TOKEN, "app_ids": hex_id, "app_id_type": "unified"})
+        r.raise_for_status()
+        apps = r.json().get("apps", [])
+        if not apps:
+            return []
+        out = []
+        for a in apps[0].get("itunes_apps", []):
+            out.append(("ios", str(a["app_id"])))
+        for a in apps[0].get("android_apps", []):
+            out.append(("android", str(a["app_id"])))
+        return out
+    except Exception:
+        return []
+
+
+async def fetch_downloads(client, conn, snap_app_id: str, start: str, end: str):
+    """앱의 주간 다운로드·매출 추정 수집. hex id는 스토어별로 변환해 합산,
+    저장 키는 스냅샷의 app_id 그대로 유지(브리핑 조인 일관성)."""
+    os_ = guess_os(snap_app_id)
+    pairs = [(os_, snap_app_id)] if os_ else await resolve_unified(client, snap_app_id)
+    if not pairs:
+        print(f"  ⏭  {snap_app_id}: 스토어 id 변환 실패, 다운로드 건너뜀")
+        return 0
+
+    agg = {}  # (country, week) -> [downloads, revenue]
+    for o, aid in pairs:
+        try:
+            r = await client.get(
+                f"https://api.sensortower.com/v1/{o}/sales_report_estimates",
+                params={"auth_token": TOKEN, "app_ids": aid, "countries": COUNTRIES,
+                        "date_granularity": "weekly", "start_date": start, "end_date": end})
+            r.raise_for_status()
+            rows = r.json()
+        except Exception as e:
+            status = getattr(getattr(e, "response", None), "status_code", "?")
+            print(f"  ❌ 다운로드 {aid}({o}): HTTP {status}")
+            continue
+        for row in rows:
+            wk = row["d"][:10]
+            key = (row.get("cc") or row.get("c"), wk)
+            # ios: iu/au(설치) ir/ar(매출) · android: u/r
+            dl = (row.get("iu", 0) or 0) + (row.get("au", 0) or 0) + (row.get("u", 0) or 0)
+            rev = (row.get("ir", 0) or 0) + (row.get("ar", 0) or 0) + (row.get("r", 0) or 0)
+            a = agg.setdefault(key, [0, 0])
+            a[0] += dl
+            a[1] += rev
+
+    now = datetime.now().isoformat(timespec="seconds")
+    for (cc, wk), (dl, rev) in agg.items():
+        conn.execute("INSERT OR REPLACE INTO app_downloads VALUES (?,?,?,?,?,?)",
+                     (snap_app_id, cc, wk, dl, rev, now))
+    conn.commit()
+    if agg:
+        print(f"  ✓ 다운로드 {snap_app_id}: {len(agg)}행")
+    return len(agg)
 
 
 async def fetch_app(client, conn, app_id: str, start: str, end: str):
@@ -129,13 +201,15 @@ async def main(app_ids, n_weeks):
     targets = app_ids or pick_target_apps(conn, latest)
     print(f"대상 앱 {len(targets)}개 / 기간 {start} ~ {latest}")
 
-    total = 0
+    total = dl_total = 0
     async with httpx.AsyncClient(timeout=30) as client:
         for a in targets:
             total += await fetch_app(client, conn, a, start, latest)
+            dl_total += await fetch_downloads(client, conn, a, start, latest)
             await asyncio.sleep(1)
     n = conn.execute("SELECT COUNT(*) FROM app_sov").fetchone()[0]
-    print(f"\n수집 {total}행 / app_sov 누적 {n:,}행")
+    nd = conn.execute("SELECT COUNT(*) FROM app_downloads").fetchone()[0]
+    print(f"\nSOV {total}행 (누적 {n:,}) / 다운로드 {dl_total}행 (누적 {nd:,})")
 
 
 if __name__ == "__main__":

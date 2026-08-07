@@ -72,6 +72,35 @@
     .logo { font-size: 16px; font-weight: 800; letter-spacing: -0.01em; }
     .logo span { color: var(--accent); }
     .header-meta { font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+
+    /* ── 순위 기준 가이드 (호버 팝오버) ── */
+    .info-wrap { position: relative; }
+    .info-btn {
+      background: var(--surface2); color: var(--text-2);
+      border: 1px solid var(--border); border-radius: 999px;
+      padding: 4px 12px; font-size: 11.5px; font-weight: 600; cursor: help;
+      transition: all var(--t);
+    }
+    .info-wrap:hover .info-btn { color: var(--text); border-color: var(--accent); }
+    .rank-guide {
+      display: none; position: fixed; top: 48px; right: 16px; z-index: 1000;
+      width: 400px; max-height: calc(100vh - 70px); overflow-y: auto;
+      background: var(--surface); border: 1px solid var(--border-strong);
+      border-radius: var(--radius); padding: 16px 18px;
+      box-shadow: var(--shadow-2); font-size: 12px; line-height: 1.65;
+      color: var(--text-2);
+    }
+    .info-wrap:hover .rank-guide { display: block; }
+    .rank-guide h4 { font-size: 13px; color: var(--text); margin-bottom: 10px; }
+    .rank-guide .rg-src {
+      border-left: 3px solid var(--accent); padding-left: 10px; margin-bottom: 12px;
+    }
+    .rank-guide .rg-sec { margin-bottom: 11px; }
+    .rank-guide .rg-sec > b { display: block; color: var(--text); margin-bottom: 2px; font-size: 12px; }
+    .rank-guide u { text-decoration: none; color: var(--info); }
+    .rank-guide .rg-warn { border-top: 1px solid var(--border); padding-top: 10px; }
+    .rank-guide .rg-warn > b { color: var(--warn); }
 
     /* ── Layout ── */
     .layout {
@@ -352,6 +381,11 @@
     }
     .tc-stats .cont-yes { color: var(--success); font-weight: 700; }
     .tc-stats .cont-no  { color: #8b93a7; }
+    .niche-tag {
+      font-size: 9px; font-weight: 700; color: var(--muted);
+      background: var(--surface3); border-radius: 4px; padding: 1px 5px;
+      cursor: help;
+    }
 
     /* ── 크리에이티브 노트 ── */
     .note-scroll { overflow-y: auto; }
@@ -905,7 +939,47 @@
     <button class="tab-btn" id="tab-brief" onclick="switchTab('brief')">주간 브리핑</button>
     <button class="tab-btn" id="tab-notes" onclick="switchTab('notes')">크리에이티브 노트</button>
   </div>
-  <div class="header-meta" id="headerMeta"></div>
+  <div class="header-right">
+    <div class="header-meta" id="headerMeta"></div>
+    <div class="info-wrap">
+      <button class="info-btn" type="button">ⓘ 순위 기준</button>
+      <div class="rank-guide">
+        <h4>이 도구의 순위는 무엇을 기준으로 하나</h4>
+        <p class="rg-src">모든 순위의 원천은 <b>Sensor Tower 패널이 관측한 광고 노출량(임프레션)</b>입니다.
+        클릭·설치·CPI가 아닙니다. 노출이 크다 = 광고주가 예산을 많이 태우고 있다는 뜻이며,
+        효율이 좋다는 보장은 아닙니다.</p>
+
+        <div class="rg-sec"><b>게임 UA · 상위 소재</b>
+          선택한 조합(매체×국가×유형)의 노출 상위 100개 소재를 노출 점유 순으로 표시.
+          광고주의 "소재 N개"는 <u>상위 100에 든 수</u>이지 보유량이 아닙니다 —
+          소액 집행 소재는 관측 자체가 안 될 수 있습니다.</div>
+
+        <div class="rg-sec"><b>백분위 (상위 N%)</b>
+          조합마다 관측 소재 수가 달라(2~100개) 절대 등수는 비교 불가 →
+          순위 ÷ 조합 크기로 환산. 모수 20개 미만 조합은 통계 무의미로 제외.</div>
+
+        <div class="rg-sec"><b>누적 상위 소재</b>
+          단일 조합 안에서 ① 등장 주 수(많은 순) → ② 평균 백분위(높은 순) 정렬.
+          등급은 배타 구간: 반기 24주+ / 분기 12~23주 / 월간 4~11주.
+          '연속'은 빠짐없이, '간헐'은 중간에 빠진 주가 있다는 뜻.</div>
+
+        <div class="rg-sec"><b>주간 브리핑 · 이번주 체크 소재</b>
+          주별 최고 백분위 기준. 4개 카테고리에서 최대 10개(앱당 1개):
+          ① 신규 즉시 상위 5% 이내 ② 기존 소재 ▲30%p 이상 급등
+          ③ 소재 대정리 후 생존(광고주의 선택) ④ 앱 물량 ×1.5 이상 급증 속 간판 소재.</div>
+
+        <div class="rg-sec"><b>보조 지표 (선정에는 미반영, 판정 근거로만)</b>
+          <u>SOV</u> = 해당 매체·국가 관측 노출 중 이 앱의 점유율 — 판의 크기까지 반영한 절대 물량.
+          <u>주간 다운로드</u> = 앱 설치 추정치 — 노출이 설치로 이어지는지의 정황 증거.
+          둘 다 앱 단위라 오가닉·타 매체 효과가 섞입니다.</div>
+
+        <div class="rg-sec rg-warn"><b>한계</b>
+          CPI·CTR·ROAS는 광고주 내부 데이터로 어떤 외부 툴로도 알 수 없습니다.
+          Meta 계열은 SOV 조회 미지원. 장기 잔류 = "광고주가 계속 돈을 내는 소재"라는
+          간접 증거일 뿐, 규모 판단은 SOV·다운로드와 함께 보세요.</div>
+      </div>
+    </div>
+  </div>
 </header>
 
 <div class="layout">
@@ -1535,6 +1609,13 @@
                 const tag = s.ratio == null ? (s.sov >= 0.005 ? 'NEW 대량' : 'NEW') : `×${s.ratio}`;
                 return `<div class="must-sov ${surge}">앱 노출점유 ${s.network}·${s.country} — ${pct(s.prev_sov)} → <b>${pct(s.sov)}</b> <span class="sov-tag">${tag}</span></div>`;
               })() : ''}
+              ${it.dl ? (() => {
+                const d = it.dl;
+                const f = v => v == null ? '—' : v >= 10000 ? (v/10000).toFixed(1) + '만' : v.toLocaleString();
+                const cls = d.ratio == null ? '' : d.ratio >= 1.3 ? 'surge' : d.ratio <= 0.8 ? 'drop' : '';
+                const tag = d.ratio == null ? 'NEW' : `${d.ratio >= 1 ? '+' : ''}${((d.ratio-1)*100).toFixed(0)}%`;
+                return `<div class="must-sov ${cls}">주간 다운로드 US·KR — ${f(d.prev_downloads)} → <b>${f(d.downloads)}</b> <span class="sov-tag">${tag}</span></div>`;
+              })() : ''}
               ${it.explanation ? `<div class="must-why">${it.explanation}</div>` : ''}
             </div>
           </div>`;
@@ -1649,7 +1730,8 @@
         creativeStore[key] = {
           creative: { id: it.unit_id, creative_url: c.creative_url, thumb_url: c.thumb_url,
                       video_duration: c.video_duration, width: c.width, height: c.height },
-          unit: { id: it.unit_id, ad_type: c.ad_type, network: c.network, country: c.country, ad_formats: [] },
+          unit: { id: it.unit_id, ad_type: c.ad_type, network: c.network, country: c.country,
+                  first_seen_at: c.first_seen_at, last_seen_at: c.last_seen_at, ad_formats: [] },
           appInfo: { name: c.app_name, publisher_name: c.publisher, icon_url: c.icon_url },
         };
         const isVideo = (c.ad_type || '').includes('video');
@@ -1664,7 +1746,8 @@
                 ${c.icon_url ? `<img class="tc-app-icon" src="${c.icon_url}" alt="">` : ''}
                 <div>
                   <div class="note-app-name">${c.app_name || '—'}</div>
-                  <div class="note-app-meta">${c.network || ''} · ${c.country || ''} · ${c.ad_type || ''}</div>
+                  <div class="note-app-meta">${c.network || ''} · ${c.country || ''} · ${c.ad_type || ''}${
+                    c.first_seen_at ? ` · 노출 ${String(c.first_seen_at).slice(0, 10)} ~ ${String(c.last_seen_at || '').slice(0, 10)}` : ''}</div>
                 </div>
                 <span class="note-verdict">${it.verdict || ''}</span>
               </div>
@@ -1807,6 +1890,8 @@
           ${stats ? `<div class="tc-stats" title="${stats.first_week} ~ ${stats.last_week}">
             ${stats.weeks}주 등장 · 최고 상위 ${stats.best_pct}% · 평균 상위 ${stats.avg_pct}%
             <span class="${stats.consecutive ? 'cont-yes' : 'cont-no'}">${stats.consecutive ? '연속' : '간헐'}</span>
+            ${stats.avg_dl != null ? `· 주DL ${stats.avg_dl >= 10000 ? (stats.avg_dl/10000).toFixed(1) + '만' : stats.avg_dl.toLocaleString()}
+              ${stats.avg_dl < 10000 ? '<span class="niche-tag" title="주평균 다운로드 1만 미만 — 좁은 판의 장수로, 대형 시장 검증과 구분 필요">니치</span>' : ''}` : ''}
           </div>` : ''}
         </div>`;
     }).join('');

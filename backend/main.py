@@ -327,6 +327,11 @@ TIER_WEEK_BANDS = {"half": (24, 999), "quarter": (12, 24), "month": (4, 12)}
 # 네트워크 노출 우선순위 (파셋 칩 정렬용 — 집행 매체 우선)
 NETWORK_PRIORITY = {n: i for i, n in enumerate(IOS_NETWORKS)}
 
+# 누적 탭에서 주평균 다운로드가 이 값 미만인 앱의 소재는 제외
+# (주 1천 미만 = 사실상 UA 미집행 — 그 '장수'는 벤치마킹 노이즈)
+# 단, 다운로드 미수집 앱은 판단 불가이므로 통과시킨다
+MIN_WEEKLY_DL = 1000
+
 
 @app.get("/api/cumulative-top")
 async def cumulative_top(
@@ -453,11 +458,27 @@ async def cumulative_top(
         conn = sqlite3.connect(SNAPSHOT_DB)
         conn.row_factory = sqlite3.Row
         try:
-            return [dict(r) for r in conn.execute(sql, params + [min_weeks, max_weeks, limit])], facets(conn)
+            result = [dict(r) for r in conn.execute(sql, params + [min_weeks, max_weeks, limit])]
+            # 앱별 주평균 다운로드 (US+KR 합산) — 니치/대형 구분용, 순위에는 미반영
+            dl_avg = {}
+            try:
+                dl_avg = {r[0]: round(r[1]) for r in conn.execute(
+                    """SELECT app_id, AVG(w) FROM (
+                         SELECT app_id, week, SUM(downloads) w
+                         FROM app_downloads GROUP BY app_id, week)
+                       GROUP BY app_id""")}
+            except sqlite3.OperationalError:
+                pass
+            return result, facets(conn), dl_avg
         finally:
             conn.close()
 
-    rows, facet_data = await asyncio.to_thread(query)
+    rows, facet_data, dl_avg = await asyncio.to_thread(query)
+
+    # 주DL 임계 미달 앱 제외 (미수집 앱은 통과)
+    rows = [r for r in rows
+            if dl_avg.get(str(r["app_id"])) is None
+            or dl_avg[str(r["app_id"])] >= MIN_WEEKLY_DL]
 
     items = []
     for i, r in enumerate(rows):
@@ -485,6 +506,7 @@ async def cumulative_top(
                 "weeks": r["weeks"], "span": span, "consecutive": r["weeks"] >= span,
                 "best_pct": r["best_pct"], "avg_pct": r["avg_pct"],
                 "first_week": r["first_week"], "last_week": r["last_week"],
+                "avg_dl": dl_avg.get(str(r["app_id"])),
             },
         })
 
@@ -725,12 +747,32 @@ async def weekly_brief(week: str = Query(None)):
             except sqlite3.OperationalError:
                 pass  # app_sov 테이블 없으면 신호 없이 진행
 
+            # 주간 다운로드 신호 (US·KR 합산) — 선정 점수에는 미반영, 판정 근거로만
+            dl_map = {}
+            try:
+                for u, _p, _rs in must:
+                    app = str(details.get(u, {}).get("app_id") or "")
+                    cur_dl = conn.execute(
+                        "SELECT SUM(downloads) FROM app_downloads WHERE app_id=? AND week=?",
+                        (app, cur_week)).fetchone()[0]
+                    if cur_dl is None:
+                        continue
+                    prev_dl = conn.execute(
+                        "SELECT SUM(downloads) FROM app_downloads WHERE app_id=? AND week=?",
+                        (app, prev_week)).fetchone()[0]
+                    dl_map[u] = {
+                        "downloads": cur_dl, "prev_downloads": prev_dl,
+                        "ratio": round(cur_dl / prev_dl, 2) if prev_dl else None,
+                    }
+            except sqlite3.OperationalError:
+                pass
+
             return cur_week, weeks, {
                 "new": new_in, "rising": rising, "longrun": longrun, "dropped": dropped,
                 "must": must,
             }, details, {
                 "movers_up": movers_up, "movers_down": movers_down, "anomalies": anomalies,
-                "sov_map": sov_map,
+                "sov_map": sov_map, "dl_map": dl_map,
             }
         finally:
             conn.close()
@@ -769,10 +811,15 @@ async def weekly_brief(week: str = Query(None)):
         "dropped": [to_item(u, r, {"weeks": w}) for u, r, w in raw["dropped"]],
     }
     sov_map = report.pop("sov_map", {})
+    dl_map = report.pop("dl_map", {})
 
-    def explanation(pct, reason, sov):
+    def fmt_dl(v):
+        return f"{v/10000:.1f}만" if v >= 10000 else f"{v:,}"
+
+    def explanation(pct, reason, sov, dl=None):
         """'왜 체크해야 하는가'를 데이터만으로 풀어 쓴 근거 문장."""
         parts = []
+        skip_sov = False
         if "생존" in reason:
             parts.append(
                 f"지난주까지 여러 소재를 돌리던 광고주가 이번 주 대부분을 내리고 "
@@ -784,7 +831,7 @@ async def weekly_brief(week: str = Query(None)):
                 f"신규가 아니라 기존에 돌던 소재인데, 이 게임의 광고 물량이 크게 늘어난 주에 "
                 f"소재들 중 최상위(상위 {pct:g}%)를 지키고 있습니다. "
                 f"예산 확대의 중심에 있는 검증 소재라는 뜻입니다.")
-            return " ".join(parts)  # SOV 수치가 이미 사유에 있어 중복 생략
+            skip_sov = True  # SOV 수치가 이미 사유에 있어 중복 생략 (다운로드 문장은 계속)
         elif reason.startswith("신규 진입"):
             parts.append(
                 f"이번 주 처음 등장하자마자 해당 매체 상위 {pct:g}%에 진입했습니다. "
@@ -797,7 +844,9 @@ async def weekly_brief(week: str = Query(None)):
         else:
             parts.append(reason + ".")
 
-        if sov:
+        if skip_sov:
+            pass
+        elif sov:
             s, pv, ratio = sov["sov"], sov.get("prev_sov"), sov.get("ratio")
             loc = f"{sov['network']}·{sov['country']}"
             if pv is None:
@@ -829,11 +878,26 @@ async def weekly_brief(week: str = Query(None)):
             parts.append(
                 "이 게임의 노출 점유율(규모) 데이터는 없습니다 — Meta 계열 매체는 규모 조회가 "
                 "지원되지 않아, 순위 신호만으로 선정됐습니다.")
+
+        # 다운로드 반응 (설치가 실제로 움직였는가 — 효율의 정황 증거)
+        if dl:
+            c_, p_, rt = dl["downloads"], dl.get("prev_downloads"), dl.get("ratio")
+            if p_ and rt and rt >= 1.3:
+                parts.append(
+                    f"같은 주 이 게임의 주간 다운로드(미국·한국 합산 추정)가 {fmt_dl(p_)} → "
+                    f"{fmt_dl(c_)}(+{(rt-1)*100:.0f}%)로 뛰었습니다 — 노출이 실제 설치로 "
+                    f"이어지고 있다는 정황입니다.")
+            elif p_ and rt and rt <= 0.8:
+                parts.append(
+                    f"같은 주 다운로드는 {fmt_dl(p_)} → {fmt_dl(c_)}로 오히려 줄었습니다 — "
+                    f"노출 신호 대비 설치 반응은 아직 확인되지 않습니다.")
+            else:
+                parts.append(f"주간 다운로드는 {fmt_dl(c_)} 수준으로 큰 변화가 없습니다.")
         return " ".join(parts)
 
     report["must_watch"] = [
-        to_item(u, p, {"reason": rs, "sov": sov_map.get(u),
-                       "explanation": explanation(p, rs, sov_map.get(u))})
+        to_item(u, p, {"reason": rs, "sov": sov_map.get(u), "dl": dl_map.get(u),
+                       "explanation": explanation(p, rs, sov_map.get(u), dl_map.get(u))})
         for u, p, rs in raw["must"]
     ]
     return {
@@ -868,12 +932,14 @@ def _unit_details(conn, unit_ids):
                MAX(creative_url) creative_url, MAX(thumb_url) thumb_url,
                MAX(video_duration) video_duration, MAX(width) w, MAX(height) h,
                GROUP_CONCAT(DISTINCT network) networks,
-               GROUP_CONCAT(DISTINCT country) countries
+               GROUP_CONCAT(DISTINCT country) countries,
+               MIN(first_seen_at) first_seen_at, MAX(last_seen_at) last_seen_at
         FROM weekly_snapshots WHERE unit_id IN ({qm}) GROUP BY unit_id""", list(unit_ids)):
         out[r[0]] = {
             "app_name": r[1], "publisher": r[2], "icon_url": r[3], "ad_type": r[4],
             "creative_url": r[5], "thumb_url": r[6], "video_duration": r[7],
             "width": r[8], "height": r[9], "network": r[10], "country": r[11],
+            "first_seen_at": r[12], "last_seen_at": r[13],
         }
     return out
 
