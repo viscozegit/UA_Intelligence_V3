@@ -136,9 +136,8 @@
     #weekPickerHidden { display: none; }
 
     .wc-dropdown {
-      position: absolute;
-      top: calc(100% + 6px);
-      left: 0;
+      /* 사이드바 overflow:hidden에 잘리지 않도록 뷰포트 기준 배치 (좌표는 JS가 계산) */
+      position: fixed;
       z-index: 999;
       background: var(--surface);
       border: 1px solid var(--border);
@@ -332,6 +331,7 @@
       background: var(--accent); color: #fff; border-color: var(--accent);
     }
     .chip-btn.active b { opacity: 0.75; }
+    .chip-btn.empty { opacity: 0.42; }
 
     .tier-toggle {
       display: flex; gap: 8px; justify-content: center;
@@ -470,6 +470,18 @@
     .must-app { font-size: 12.5px; font-weight: 700; }
     .must-reason { font-size: 11px; color: var(--info); margin-top: 2px; line-height: 1.35; }
     .must-meta { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+    .must-sov {
+      font-size: 11px; color: var(--text-2); margin-top: 6px;
+      font-variant-numeric: tabular-nums;
+    }
+    .must-sov b { color: var(--text); }
+    .must-sov .sov-tag {
+      font-size: 10px; font-weight: 800; padding: 1px 5px; border-radius: 4px;
+      background: var(--surface3); color: var(--muted); margin-left: 3px;
+    }
+    .must-sov.surge .sov-tag { background: rgba(74,222,128,0.14); color: var(--success); }
+    .must-sov.drop  .sov-tag { background: rgba(248,113,113,0.12); color: var(--danger); }
+
     .must-hook { display: flex; align-items: center; gap: 5px; margin-top: 6px; }
     .hook-chip {
       font-size: 10px; font-weight: 700; color: #d4b0ff;
@@ -1086,7 +1098,17 @@
   function toggleWeekCalendar() {
     const dd = document.getElementById('wcDropdown');
     dd.classList.toggle('open');
-    if (dd.classList.contains('open')) renderWcGrid();
+    if (dd.classList.contains('open')) {
+      // 버튼 위치 기준으로 뷰포트 좌표 계산 (아래 공간 부족 시 위로 펼침)
+      const r = document.querySelector('.week-btn').getBoundingClientRect();
+      const H = 300;  // 달력 대략 높이
+      const top = (r.bottom + 6 + H > window.innerHeight && r.top - 6 - H > 0)
+        ? r.top - 6 - H
+        : r.bottom + 6;
+      dd.style.top  = `${Math.max(8, top)}px`;
+      dd.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 240))}px`;
+      renderWcGrid();
+    }
   }
   function closeWeekCalendar() {
     document.getElementById('wcDropdown').classList.remove('open');
@@ -1328,8 +1350,11 @@
   const DIM_LABEL  = { network: '네트워크', country: '국가', platform: '플랫폼', ad_type: '유형' };
   const VAL_LABEL  = { ios: 'iOS', android: 'Android', video: 'Video', image: 'Image' };
 
+  // 조합 간 평균이 섞이지 않도록 '전체' 없이 단일 조합 선택을 강제한다
+  // (unified 네트워크는 플랫폼 구분이 없으므로 platform='all' 고정 + 칩 숨김)
+  const UNIFIED_NETS = ['Meta Audience Network', 'TikTok'];
   let cumTier = 'half';
-  let cumSel  = { network: 'all', country: 'all', platform: 'all', ad_type: 'all' };
+  let cumSel  = { network: 'Meta Audience Network', country: 'KR', platform: 'all', ad_type: 'video' };
 
   function setCumTier(t) {
     if (t === cumTier) return;
@@ -1340,32 +1365,45 @@
   function setCumFilter(dim, val) {
     if (cumSel[dim] === val) return;
     cumSel[dim] = val;
+    if (dim === 'network') {
+      // unified ↔ public 전환 시 플랫폼 상태 정리
+      if (UNIFIED_NETS.includes(val)) cumSel.platform = 'all';
+      else if (cumSel.platform === 'all') cumSel.platform = 'ios';
+    }
     fetchCumulative();
   }
 
-  // 등급 토글 + 차원별 칩 필터 (수집된 값만 노출 → 빈 결과 선택 자체가 불가능)
+  // 등급 토글 + 차원별 칩 필터 (수집된 값만 노출, 단일 선택)
   function cumBarHtml(facets = {}) {
     const tiers = Object.entries(TIER_LABEL).map(([k, v]) =>
       `<button class="tier-btn ${k === cumTier ? 'active' : ''}" onclick="setCumTier('${k}')">${v}</button>`
     ).join('');
 
-    // 차원 하나의 라벨 + 칩 묶음
+    // 칩 도메인은 수집 범위로 고정, 개수만 현재 필터 기준으로 동적 표시.
+    // (파셋 값에만 의존하면 데이터 없는 조합에서 칩이 사라져 전환 자체가 막힌다)
+    const DIM_DOMAIN = {
+      network: ['Meta Audience Network', 'Youtube', 'TikTok', 'Applovin', 'Unity', 'Admob', 'Vungle'],
+      country: ['US', 'KR'],
+      platform: ['ios', 'android'],
+      ad_type: ['video', 'image'],
+    };
     const group = dim => {
-      const f = facets[dim];
-      if (!f || !f.values?.length) return '';
-      const chips = [`<button class="chip-btn ${cumSel[dim] === 'all' ? 'active' : ''}"
-          onclick="setCumFilter('${dim}','all')">전체 <b>${f.all}</b></button>`]
-        .concat(f.values.map(v =>
-          `<button class="chip-btn ${cumSel[dim] === v.value ? 'active' : ''}"
-            onclick="setCumFilter('${dim}','${String(v.value).replace(/'/g, "\\'")}')">
-            ${VAL_LABEL[v.value] || v.value} <b>${v.count}</b></button>`));
+      const counts = Object.fromEntries((facets[dim]?.values || []).map(v => [v.value, v.count]));
+      const chips = DIM_DOMAIN[dim].map(v => {
+        const n = counts[v] || 0;
+        return `<button class="chip-btn ${cumSel[dim] === v ? 'active' : ''} ${n ? '' : 'empty'}"
+          onclick="setCumFilter('${dim}','${v.replace(/'/g, "\\'")}')">
+          ${VAL_LABEL[v] || v} <b>${n}</b></button>`;
+      }).join('');
       return `<div class="facet-group"><span class="facet-label">${DIM_LABEL[dim]}</span>
-        <div class="facet-chips">${chips.join('')}</div></div>`;
+        <div class="facet-chips">${chips}</div></div>`;
     };
 
-    // 네트워크는 값이 많아 단독 행, 나머지 셋은 한 행에 나란히
+    // unified 네트워크 선택 시 플랫폼 칩 숨김 (구분 자체가 없음)
+    const showPlatform = !UNIFIED_NETS.includes(cumSel.network);
     const netRow    = group('network');
-    const inlineRow = ['country', 'platform', 'ad_type'].map(group).join('');
+    const inlineRow = ['country', ...(showPlatform ? ['platform'] : []), 'ad_type']
+      .map(group).join('');
 
     return `<div class="cum-bar">
       <div class="tier-toggle">${tiers}</div>
@@ -1490,11 +1528,14 @@
               <div class="must-app">${it.app_info?.name || '—'}</div>
               <div class="must-reason">${it.reason || ''}</div>
               <div class="must-meta">${it.unit.network || ''} · ${it.unit.country || ''}</div>
-              ${it.analysis ? `
-                <div class="must-hook"><span class="hook-chip">${it.analysis.hook_type}</span>
-                  <span class="conf-tag conf-${it.analysis.confidence}">${it.analysis.confidence}</span></div>
-                <div class="must-why" title="${(it.analysis.visual_summary || '').replace(/"/g, '&quot;')}">
-                  ${it.analysis.why_hypothesis || ''}</div>` : ''}
+              ${it.sov ? (() => {
+                const s = it.sov;
+                const pct = v => v == null ? '—' : (v * 100).toFixed(2) + '%';
+                const surge = s.ratio == null ? (s.sov >= 0.005 ? 'surge' : '') : (s.ratio >= 1.5 ? 'surge' : s.ratio < 0.7 ? 'drop' : '');
+                const tag = s.ratio == null ? (s.sov >= 0.005 ? 'NEW 대량' : 'NEW') : `×${s.ratio}`;
+                return `<div class="must-sov ${surge}">앱 노출점유 ${s.network}·${s.country} — ${pct(s.prev_sov)} → <b>${pct(s.sov)}</b> <span class="sov-tag">${tag}</span></div>`;
+              })() : ''}
+              ${it.explanation ? `<div class="must-why">${it.explanation}</div>` : ''}
             </div>
           </div>`;
       }).join('');
@@ -1517,7 +1558,7 @@
       const reportHtml = `
         <div class="report">
           <div class="report-block wide">
-            <div class="report-title">이번 주 꼭 봐야 할 소재</div>
+            <div class="report-title">이번주 체크 소재</div>
             ${mustCards ? `<div class="must-list">${mustCards}</div>`
                         : `<div class="brief-empty">기준을 충족한 소재 없음</div>`}
           </div>

@@ -580,36 +580,78 @@ async def weekly_brief(week: str = Query(None)):
                 (mover(a) for a in app_cnt.values() if a["prev"] >= 5 and a["cur"] < a["prev"]),
                 key=lambda x: x["delta"])[:5]
 
-            # ⭐ 꼭 봐야 할 소재 — 세 종류 신호를 점수화 후 상위 5개 (앱당 1개)
-            surge_apps = {m["name"]: m for m in movers_up}
-            picks = []
+            # ⭐ 이번주 체크 소재 — 신규/기존 4개 카테고리에서 최대 10개 (앱당 1개).
+            # 신규가 목록을 점령하지 않도록 카테고리별 상한을 둔다.
+            MUST_N = 10
+            CAT_CAPS = {"new": 4, "rise": 3, "survivor": 3, "budget": 3}
+            cands = []  # (category, score, unit_id, pct, reason)
+
+            # A. 신규 즉시 상위권
             for u, p in new_in:
                 if p <= 5:
-                    c = meta.get(u, {}).get("combos", 1)
-                    picks.append((100 - p * 4 + (c - 1) * 10, u, p,
-                                  f"신규 진입 즉시 상위 {p:g}%"
-                                  + (f" · {c}개 조합 동시 집행" if c >= 2 else "")))
-            for u, r, pv, dl in rising:
-                if dl >= 40:
-                    picks.append((50 + dl * 0.4, u, r,
-                                  f"상위 {pv:g}% → {r:g}% 급등 (▲{dl:g}%p)"))
-            for u, p in new_in:
-                nm = meta.get(u, {}).get("app_name")
-                m = surge_apps.get(nm)
-                if m and m["delta"] >= 8:
-                    picks.append((40 + min(m["growth"] or 0, 300) * 0.1, u, p,
-                                  f"소재 {m['prev']}→{m['cur']}개 대량 증설 · 그중 최상위"))
+                    cands.append(("new", 100 - p * 4, u, p, f"신규 진입 즉시 상위 {p:g}%"))
 
-            picks.sort(key=lambda x: -x[0])
-            must, seen_app = [], set()
-            for score, u, p, reason in picks:
-                app = meta.get(u, {}).get("app_id")
-                if u in {m[0] for m in must} or app in seen_app:
-                    continue
-                seen_app.add(app)
-                must.append((u, p, reason))
-                if len(must) == 5:
-                    break
+            # B. 기존 소재 급등
+            for u, r, pv, dl in rising:
+                if dl >= 30:
+                    cands.append(("rise", 60 + dl * 0.4, u, r,
+                                  f"상위 {pv:g}% → {r:g}% 급등 (▲{dl:g}%p)"))
+
+            # C. 구조조정 생존자 — 앱이 소재를 대량 정리했는데 남은 '기존' 소재
+            app_units_cur = {}
+            for u2 in cur:
+                a2 = meta.get(u2, {}).get("app_id")
+                if a2:
+                    app_units_cur.setdefault(a2, []).append(u2)
+            prev_app_counts = {r[0]: r[1] for r in conn.execute(
+                f"{SNAP_CTE} SELECT app_id, COUNT(DISTINCT unit_id) FROM snap "
+                "WHERE week = ? GROUP BY app_id", (prev_week,))}
+            for a2, units2 in app_units_cur.items():
+                pn, cn = prev_app_counts.get(a2, 0), len(units2)
+                if pn >= 5 and cn <= max(2, int(pn * 0.3)):
+                    olds = [u2 for u2 in units2 if up_prev.get(u2, 0) >= 2]
+                    if not olds:
+                        continue
+                    u2 = min(olds, key=lambda x: cur[x])
+                    cands.append(("survivor", 70 + (pn - cn), u2, cur[u2],
+                                  f"소재 {pn}→{cn}개 대정리 후 생존"))
+
+            # D. 앱 물량 급증 속 간판 기존 소재 (SOV 수집분이 있는 앱만)
+            try:
+                for a2, net2, c2, s_cur, s_prev in conn.execute("""
+                        SELECT a.app_id, a.network, a.country, a.sov, b.sov FROM app_sov a
+                        JOIN app_sov b ON a.app_id=b.app_id AND a.network=b.network
+                                       AND a.country=b.country
+                        WHERE a.week=? AND b.week=? AND a.sov>=0.003
+                          AND b.sov>0 AND a.sov/b.sov>=1.5""",
+                        (cur_week, prev_week)).fetchall():
+                    units2 = [u2 for u2 in app_units_cur.get(a2, [])
+                              if up_cur.get(u2, 0) >= 2]
+                    if not units2:
+                        continue
+                    u2 = min(units2, key=lambda x: cur[x])
+                    ratio2 = round(s_cur / s_prev, 1)
+                    cands.append(("budget", 65 + min(ratio2, 5) * 5, u2, cur[u2],
+                                  f"앱 물량 ×{ratio2} 급증({net2}·{c2} "
+                                  f"{s_prev*100:.2f}%→{s_cur*100:.2f}%) 속 간판 소재"))
+            except sqlite3.OperationalError:
+                pass
+
+            cands.sort(key=lambda x: -x[1])
+            must, seen_app, used = [], set(), {}
+            # 1차: 카테고리 상한 지키며 채움 / 2차: 자리 남으면 상한 없이 점수순 충원
+            for respect_caps in (True, False):
+                for cat, _sc, u2, p2, rs in cands:
+                    if len(must) >= MUST_N:
+                        break
+                    app2 = meta.get(u2, {}).get("app_id")
+                    if u2 in {m[0] for m in must} or app2 in seen_app:
+                        continue
+                    if respect_caps and used.get(cat, 0) >= CAT_CAPS[cat]:
+                        continue
+                    used[cat] = used.get(cat, 0) + 1
+                    seen_app.add(app2)
+                    must.append((u2, p2, rs))
 
             # ⚠️ 이상 신호 — 직전 4주 평균 대비 이탈
             hist = conn.execute(
@@ -630,26 +672,11 @@ async def weekly_brief(week: str = Query(None)):
                                 "dev": dev,
                             })
 
-            # must-watch 소재의 LLM 분석 결과 (있는 경우만 — 주별 수동/스케줄 분석으로 적재됨)
-            analysis_map = {}
-            try:
-                if must:
-                    qm2 = ",".join("?" * len(must))
-                    for r in conn.execute(
-                        f"""SELECT unit_id, hook_type, first_3s, visual_summary,
-                                   why_hypothesis, confidence
-                            FROM creative_analysis
-                            WHERE week = ? AND unit_id IN ({qm2})""",
-                        [cur_week] + [m[0] for m in must]):
-                        analysis_map[r[0]] = {
-                            "hook_type": r[1], "first_3s": r[2], "visual_summary": r[3],
-                            "why_hypothesis": r[4], "confidence": r[5],
-                        }
-            except sqlite3.OperationalError:
-                pass  # 테이블 없으면 분석 없이 표시
+            # (소재 내용 분석은 크리에이티브 노트 전담 — 브리핑은 데이터 신호만 다룬다)
 
             # ── 카드 렌더용 상세 정보 일괄 조회 ────────────────
             ids = {x[0] for grp in (new_in, rising, longrun, dropped, must) for x in grp}
+            sov_map = {}  # must-watch 소재의 앱 SOV 신호 (아래 details 채운 뒤 계산)
             details = {}
             if ids:
                 qm = ",".join("?" * len(ids))
@@ -667,12 +694,43 @@ async def weekly_brief(week: str = Query(None)):
                 """, list(ids)):
                     details[r["unit_id"]] = dict(r)
 
+            # must-watch 소재의 '소재 진입 × 앱 SOV' 신호 — 순위(서수)가 못 주는
+            # 절대 규모·급증 여부를 sov_collect.py가 수집한 app_sov에서 조회
+            try:
+                for u, _p, _rs in must:
+                    d = details.get(u, {})
+                    app = str(d.get("app_id") or "")
+                    nets = [n for n in (d.get("networks") or "").split(",")
+                            if n and n != "Meta Audience Network"]
+                    ctrs = [c for c in (d.get("countries") or "").split(",") if c]
+                    best = None
+                    for n in nets:
+                        for c in ctrs:
+                            cur_v = conn.execute(
+                                "SELECT sov FROM app_sov WHERE app_id=? AND network=? AND country=? AND week=?",
+                                (app, n, c, cur_week)).fetchone()
+                            if not cur_v or cur_v[0] is None:
+                                continue
+                            prv_v = conn.execute(
+                                "SELECT sov FROM app_sov WHERE app_id=? AND network=? AND country=? AND week=?",
+                                (app, n, c, prev_week)).fetchone()
+                            sig = {"network": n, "country": c, "sov": cur_v[0],
+                                   "prev_sov": prv_v[0] if prv_v else None}
+                            sig["ratio"] = (round(sig["sov"] / sig["prev_sov"], 2)
+                                            if sig["prev_sov"] else None)
+                            if best is None or (sig["sov"] or 0) > (best["sov"] or 0):
+                                best = sig
+                    if best:
+                        sov_map[u] = best
+            except sqlite3.OperationalError:
+                pass  # app_sov 테이블 없으면 신호 없이 진행
+
             return cur_week, weeks, {
                 "new": new_in, "rising": rising, "longrun": longrun, "dropped": dropped,
                 "must": must,
             }, details, {
                 "movers_up": movers_up, "movers_down": movers_down, "anomalies": anomalies,
-                "analysis_map": analysis_map,
+                "sov_map": sov_map,
             }
         finally:
             conn.close()
@@ -710,9 +768,72 @@ async def weekly_brief(week: str = Query(None)):
         "longrun": [to_item(u, r, {"weeks": LONGRUN_WEEKS}) for u, r in raw["longrun"]],
         "dropped": [to_item(u, r, {"weeks": w}) for u, r, w in raw["dropped"]],
     }
-    analysis_map = report.pop("analysis_map", {})
+    sov_map = report.pop("sov_map", {})
+
+    def explanation(pct, reason, sov):
+        """'왜 체크해야 하는가'를 데이터만으로 풀어 쓴 근거 문장."""
+        parts = []
+        if "생존" in reason:
+            parts.append(
+                f"지난주까지 여러 소재를 돌리던 광고주가 이번 주 대부분을 내리고 "
+                f"이 소재를 남겼습니다 ({reason.split(' 대정리')[0].replace('소재 ', '')}). "
+                f"기존에 돌던 소재라 우연이 아니라 성과 데이터를 보고 내린 선택 — "
+                f"광고주 내부 테스트의 승자일 가능성이 높습니다. 현재 상위 {pct:g}%.")
+        elif reason.startswith("앱 물량"):
+            parts.append(
+                f"신규가 아니라 기존에 돌던 소재인데, 이 게임의 광고 물량이 크게 늘어난 주에 "
+                f"소재들 중 최상위(상위 {pct:g}%)를 지키고 있습니다. "
+                f"예산 확대의 중심에 있는 검증 소재라는 뜻입니다.")
+            return " ".join(parts)  # SOV 수치가 이미 사유에 있어 중복 생략
+        elif reason.startswith("신규 진입"):
+            parts.append(
+                f"이번 주 처음 등장하자마자 해당 매체 상위 {pct:g}%에 진입했습니다. "
+                f"신규 소재는 보통 하위권에서 시작하므로, 첫 주부터 최상위권이라는 건 "
+                f"광고주가 검증을 마치고 예산을 몰아줬다는 신호입니다.")
+        elif "급등" in reason or "%p" in reason:
+            parts.append(
+                f"지난주까지 하위권이던 소재가 이번 주 상위 {pct:g}%까지 뛰었습니다. "
+                f"초기 테스트에서 성과가 확인되어 예산이 확대되는 전형적인 스케일업 패턴입니다.")
+        else:
+            parts.append(reason + ".")
+
+        if sov:
+            s, pv, ratio = sov["sov"], sov.get("prev_sov"), sov.get("ratio")
+            loc = f"{sov['network']}·{sov['country']}"
+            if pv is None:
+                if s >= 0.005:
+                    parts.append(
+                        f"같은 주에 이 게임의 {loc} 노출 점유율이 0에서 {s*100:.1f}%로 나타났습니다. "
+                        f"해당 매체 광고 노출 100번 중 {s*100:.0f}번이 이 게임이라는 뜻으로, "
+                        f"신규 소재에 대규모 물량이 실린 강력한 대박 신호입니다.")
+                else:
+                    parts.append(
+                        f"이 게임의 {loc} 노출 점유율도 이번 주 처음 잡히기 시작했습니다"
+                        f"({s*100:.2f}%) — 캠페인이 막 시작된 단계입니다.")
+            elif ratio and ratio >= 1.5:
+                parts.append(
+                    f"이 게임의 {loc} 노출 점유율이 {pv*100:.2f}% → {s*100:.2f}%로 "
+                    f"{ratio}배 급증했습니다. 소재 투입과 물량 확대가 같은 주에 일어난 것 — "
+                    f"이 소재가 확대를 이끌었을 가능성이 높습니다.")
+            elif ratio and ratio < 0.7:
+                parts.append(
+                    f"다만 앱 전체 노출 점유율은 {pv*100:.2f}% → {s*100:.2f}%로 줄고 있습니다. "
+                    f"물량 확대라기보다 기존 소재를 내리고 교체하는 국면으로 읽히며, "
+                    f"'대박'보다는 관찰 대상에 가깝습니다.")
+            else:
+                parts.append(
+                    f"앱 노출 점유율은 {pv*100:.2f}% → {s*100:.2f}%로 안정적입니다. "
+                    f"물량 변화 없이 이 소재가 상위권을 차지한 것 — 기존 캠페인 안에서 "
+                    f"성과로 자리를 얻은 소재입니다.")
+        else:
+            parts.append(
+                "이 게임의 노출 점유율(규모) 데이터는 없습니다 — Meta 계열 매체는 규모 조회가 "
+                "지원되지 않아, 순위 신호만으로 선정됐습니다.")
+        return " ".join(parts)
+
     report["must_watch"] = [
-        to_item(u, p, {"reason": rs, "analysis": analysis_map.get(u)})
+        to_item(u, p, {"reason": rs, "sov": sov_map.get(u),
+                       "explanation": explanation(p, rs, sov_map.get(u))})
         for u, p, rs in raw["must"]
     ]
     return {
