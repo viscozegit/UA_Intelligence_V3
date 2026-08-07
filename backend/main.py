@@ -944,6 +944,25 @@ def _unit_details(conn, unit_ids):
     return out
 
 
+@app.get("/api/unit/{unit_id}")
+async def get_unit(unit_id: str):
+    """단일 소재 조회 — 딥링크(#c=unit_id)로 모달을 바로 열 때 사용"""
+    if not os.path.exists(SNAPSHOT_DB):
+        raise HTTPException(status_code=404, detail="소재 없음")
+
+    def query():
+        conn = sqlite3.connect(SNAPSHOT_DB)
+        try:
+            return _unit_details(conn, [unit_id]).get(unit_id)
+        finally:
+            conn.close()
+
+    d = await asyncio.to_thread(query)
+    if d is None:
+        raise HTTPException(status_code=404, detail="소재 없음")
+    return {"unit_id": unit_id, **d}
+
+
 @app.get("/api/notes")
 async def list_notes():
     """노트 목록 (최신순)"""

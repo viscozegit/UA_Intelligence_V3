@@ -364,7 +364,11 @@
 
     .tier-toggle {
       display: flex; gap: 8px; justify-content: center;
-      margin: 2px 0 10px;
+      margin: 2px 0 6px;
+    }
+    .tier-desc {
+      text-align: center; font-size: 12px; color: var(--muted);
+      margin-bottom: 10px;
     }
     .tier-btn {
       background: var(--surface2); color: var(--muted);
@@ -790,6 +794,16 @@
     .modal-meta-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
     .modal-meta-value { font-size: 13px; font-weight: 600; margin-top: 2px; }
 
+    .modal-link-btn {
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      width: 100%; margin-top: 8px;
+      padding: 9px; border-radius: 8px;
+      background: none; border: 1px solid var(--border);
+      color: var(--text-2); font-size: 12.5px; font-weight: 600; cursor: pointer;
+      transition: all var(--t);
+    }
+    .modal-link-btn:hover { color: var(--text); border-color: var(--accent); }
+
     .modal-dl-btn {
       display: flex; align-items: center; justify-content: center; gap-6px;
       padding: 10px; border-radius: 8px;
@@ -1139,6 +1153,9 @@
     // 플랫폼에 맞는 네트워크·카테고리 로드 후 Youtube·Games 선택
     await loadMeta();
     document.getElementById('network').value  = 'Meta Audience Network';
+
+    // 딥링크(#c=unit_id)로 진입한 경우 해당 소재 모달을 바로 연다
+    openFromHash();
     // category는 loadMeta에서 첫 번째(Games All)가 기본 선택됨
 
     // 주 달력 초기화 (가장 최근 주)
@@ -1421,6 +1438,11 @@
 
   // ── 누적 상위 소재 (스냅샷 DB 기반) ──────────────────────────
   const TIER_LABEL = { half: '반기 TOP', quarter: '분기 TOP', month: '월간 TOP' };
+  const TIER_DESC = {
+    half:    '반년 이상(24주+) 노출 상위권을 지킨 소재 모음 — 광고비가 계속 투입된, 검증의 최상급',
+    quarter: '한 분기 이상(12~23주) 상위권을 유지한 소재 모음 — 테스트를 통과해 자리 잡은 그룹',
+    month:   '한 달 이상(4~11주) 살아남은 소재 모음 — 초기 검증을 통과한 신흥 그룹',
+  };
   const DIM_LABEL  = { network: '네트워크', country: '국가', platform: '플랫폼', ad_type: '유형' };
   const VAL_LABEL  = { ios: 'iOS', android: 'Android', video: 'Video', image: 'Image' };
 
@@ -1481,6 +1503,7 @@
 
     return `<div class="cum-bar">
       <div class="tier-toggle">${tiers}</div>
+      <div class="tier-desc">${TIER_DESC[cumTier] || ''}</div>
       ${netRow ? `<div class="facet-row">${netRow}</div>` : ''}
       ${inlineRow ? `<div class="facet-row facet-inline">${inlineRow}</div>` : ''}
     </div>`;
@@ -2193,11 +2216,46 @@
       <button class="modal-dl-btn" onclick="downloadByUrl('${encodeURIComponent(mediaUrl)}', '${encodeURIComponent((appInfo?.name||'creative')+'_'+unit.id+adTypeExt(unit.ad_type))}')">
         ⬇ 원본 다운로드
       </button>
+      <button class="modal-link-btn" onclick="copyCreativeLink('${unit.id || ''}')">
+        🔗 소재 링크 복사
+      </button>
     `;
 
     document.getElementById('modalBackdrop').style.display = 'flex';
     document.body.style.overflow = 'hidden';
     updateNavButtons();
+
+    // 딥링크: 주소창에 소재 id 반영 (공유 가능)
+    if (unit.id) history.replaceState(null, '', `#c=${unit.id}`);
+  }
+
+  function copyCreativeLink(unitId) {
+    if (!unitId) return;
+    const url = `${location.origin}${location.pathname}#c=${unitId}`;
+    navigator.clipboard.writeText(url).then(
+      () => showToast(`링크 복사됨 — ${url}`),
+      () => showToast('복사 실패 — 주소창의 URL을 직접 복사하세요'));
+  }
+
+  // 딥링크 진입: #c=<unit_id> 로 접속하면 해당 소재 모달을 바로 연다
+  async function openFromHash() {
+    const m = location.hash.match(/^#c=([0-9a-f]+)$/);
+    if (!m) return;
+    try {
+      const res = await fetch(`/api/unit/${m[1]}`);
+      if (!res.ok) { showToast('해당 소재를 찾을 수 없습니다'); return; }
+      const c = await res.json();
+      const key = `deeplink_${c.unit_id}`;
+      creativeStore[key] = {
+        creative: { id: c.unit_id, creative_url: c.creative_url, thumb_url: c.thumb_url,
+                    video_duration: c.video_duration, width: c.width, height: c.height },
+        unit: { id: c.unit_id, ad_type: c.ad_type, network: c.network, country: c.country,
+                first_seen_at: c.first_seen_at, last_seen_at: c.last_seen_at, ad_formats: [] },
+        appInfo: { name: c.app_name, publisher_name: c.publisher, icon_url: c.icon_url },
+      };
+      modalKeys = [key];
+      openCreativeModal(key);
+    } catch { /* 서버 미기동 등 — 조용히 무시 */ }
   }
 
   // ── Modal Close ────────────────────────────────────────────
@@ -2212,6 +2270,8 @@
     if (video) { video.pause(); video.src = ''; }
     backdrop.style.display = 'none';
     document.body.style.overflow = '';
+    // 딥링크 해시 제거 (닫힌 모달 주소가 남지 않게)
+    if (location.hash.startsWith('#c=')) history.replaceState(null, '', location.pathname);
     modalKeys = []; modalIdx = -1;
   }
 
