@@ -353,6 +353,76 @@
     .tc-stats .cont-yes { color: var(--success); font-weight: 700; }
     .tc-stats .cont-no  { color: #8b93a7; }
 
+    /* ── 크리에이티브 노트 ── */
+    .note-scroll { overflow-y: auto; }
+    .note-list { max-width: 860px; margin: 20px auto; padding: 0 20px; display: flex; flex-direction: column; gap: 10px; }
+    .note-item {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 16px 18px; cursor: pointer; transition: border-color var(--t), transform var(--t);
+    }
+    .note-item:hover { border-color: var(--border-strong); transform: translateY(-1px); }
+    .note-item-title { font-size: 15px; font-weight: 700; line-height: 1.4; }
+    .note-item-meta { font-size: 12px; color: var(--muted); margin-top: 5px; }
+
+    .note-page { max-width: 860px; margin: 0 auto; padding: 24px 20px 60px; }
+    .note-back {
+      background: none; border: 1px solid var(--border); color: var(--text-2);
+      border-radius: var(--radius-sm); padding: 5px 12px; font-size: 12px; cursor: pointer;
+      margin-bottom: 18px; transition: all var(--t);
+    }
+    .note-back:hover { color: var(--text); border-color: var(--border-strong); }
+    .note-title { font-size: 21px; font-weight: 800; line-height: 1.35; letter-spacing: -0.01em; }
+    .note-date { font-size: 12px; color: var(--muted); margin: 8px 0 16px; }
+    .note-intro {
+      font-size: 13.5px; color: var(--text-2); line-height: 1.65;
+      border-left: 3px solid var(--accent); padding: 2px 0 2px 14px; margin-bottom: 28px;
+    }
+
+    .note-creative {
+      display: grid; grid-template-columns: 240px 1fr; gap: 22px;
+      padding: 26px 0; border-top: 1px solid var(--border);
+    }
+    .note-media {
+      position: relative; align-self: start; cursor: pointer;
+      border-radius: var(--radius); overflow: hidden; background: var(--surface2);
+      aspect-ratio: 9/14;
+    }
+    .note-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .note-media:hover { outline: 2px solid var(--accent); }
+    .note-app-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .note-app-name { font-size: 14px; font-weight: 700; }
+    .note-app-meta { font-size: 11.5px; color: var(--muted); }
+    .note-verdict {
+      margin-left: auto; font-size: 12px; font-weight: 800; color: var(--warn);
+      background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.35);
+      border-radius: 6px; padding: 3px 10px; white-space: nowrap;
+    }
+    .note-headline { font-size: 17px; font-weight: 800; margin: 4px 0 12px; letter-spacing: -0.01em; }
+    .note-p { font-size: 13.5px; line-height: 1.75; color: var(--text-2); margin-bottom: 10px; }
+    .note-take {
+      border-radius: var(--radius-sm); padding: 10px 14px; margin-top: 10px; font-size: 12.5px;
+    }
+    .note-take b { display: block; font-size: 11px; letter-spacing: 0.05em; margin-bottom: 6px; }
+    .note-take ul { margin: 0; padding-left: 16px; }
+    .note-take li { line-height: 1.6; margin-bottom: 3px; }
+    .note-take.good { background: rgba(74,222,128,0.07); border: 1px solid rgba(74,222,128,0.25); }
+    .note-take.good b { color: var(--success); }
+    .note-take.bad { background: rgba(248,113,113,0.07); border: 1px solid rgba(248,113,113,0.25); }
+    .note-take.bad b { color: var(--danger); }
+
+    .note-synthesis {
+      margin-top: 10px; padding: 24px; border-radius: var(--radius);
+      background: var(--surface); border: 1px solid var(--border-strong);
+    }
+    .note-synthesis h2 { font-size: 16px; font-weight: 800; margin-bottom: 16px; }
+    .syn-point { margin-bottom: 16px; }
+    .syn-title { font-size: 13.5px; font-weight: 700; color: var(--warn); margin-bottom: 6px; }
+
+    @media (max-width: 760px) {
+      .note-creative { grid-template-columns: 1fr; }
+      .note-media { max-width: 300px; }
+    }
+
     /* ── 주간 브리핑: 리포트 카드 ── */
     .report {
       display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
@@ -821,8 +891,9 @@
     <button class="tab-btn" id="tab-topCreatives" onclick="switchTab('topCreatives')">상위 소재</button>
     <button class="tab-btn" id="tab-cumulative" onclick="switchTab('cumulative')">누적 상위 소재</button>
     <button class="tab-btn" id="tab-brief" onclick="switchTab('brief')">주간 브리핑</button>
+    <button class="tab-btn" id="tab-notes" onclick="switchTab('notes')">크리에이티브 노트</button>
   </div>
-  <div class="header-meta" id="headerMeta">Sensor Tower Ad Intelligence</div>
+  <div class="header-meta" id="headerMeta"></div>
 </header>
 
 <div class="layout">
@@ -941,13 +1012,13 @@
     const sidebar = document.querySelector('.sidebar');
     const layout  = document.querySelector('.layout');
 
-    if (tab === 'cumulative' || tab === 'brief') {
+    if (tab === 'cumulative' || tab === 'brief' || tab === 'notes') {
       // 로컬 DB만 조회 → 사이드바 없이 즉시 조회 (센서타워 호출 없음)
       sidebar.style.display = 'none';
       layout.classList.add('no-sidebar');
       advertiserList.style.display = 'none';
       document.getElementById('mainContent').className = 'main tc-main';
-      tab === 'brief' ? fetchBrief() : fetchCumulative();
+      tab === 'brief' ? fetchBrief() : tab === 'notes' ? fetchNotes() : fetchCumulative();
       return;
     }
     sidebar.style.display = '';
@@ -964,11 +1035,16 @@
       document.getElementById('mainContent').innerHTML =
         '<div class="state-box"><div class="icon">🎮</div><p>좌측에서 광고주를 선택하면<br>UA 소재를 확인할 수 있습니다</p></div>';
     }
-    document.getElementById('headerMeta').textContent = 'Sensor Tower Ad Intelligence';
   }
 
   // ── Init ───────────────────────────────────────────────────
   (async function init() {
+    // 우상단: 오늘 날짜 고정 표시
+    const now = new Date();
+    const days = ['일', '월', '화', '수', '목', '금', '토'];
+    document.getElementById('headerMeta').textContent =
+      `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')} (${days[now.getDay()]})`;
+
     // 기본값 설정
     document.getElementById('platform').value = 'all';
     document.getElementById('country').value  = 'KR';
@@ -1198,8 +1274,6 @@
 
       const network = document.getElementById('network').value;
       const weekLabel = document.getElementById('weekBtnLabel').textContent;
-      document.getElementById('headerMeta').textContent =
-        `${network} · ${weekLabel} · ${advertisers.length}개 광고주 · ${allAdUnits.length}개 소재`;
 
       renderAdvertiserList(advertisers);
 
@@ -1240,8 +1314,6 @@
         showToast(`${data.failed_calls}개 호출 실패 (${(data.errors || [])[0] || ''}) — 결과가 불완전할 수 있습니다`);
       }
       const weekLabel = document.getElementById('weekBtnLabel').textContent;
-      document.getElementById('headerMeta').textContent =
-        `${document.getElementById('network').value} · ${weekLabel} · 상위 소재 ${list.length}개`;
       renderTopCreatives(list);
     } catch (e) {
       showToast(e.message);
@@ -1327,9 +1399,10 @@
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail || `HTTP ${res.status}`); }
       const data = await res.json();
       const list = data.creatives || [];
-      document.getElementById('headerMeta').textContent =
-        `${TIER_LABEL[cumTier]} · ${data.min_weeks}주 이상 등장 · ${list.length}개 소재`;
-      renderTopCreatives(list, `${data.min_weeks}주 이상 등장한 소재 ${list.length}개`);
+      const range = data.max_weeks > 90
+        ? `${data.min_weeks}주 이상`
+        : `${data.min_weeks}~${data.max_weeks - 1}주`;
+      renderTopCreatives(list, `${range} 등장한 소재 ${list.length}개`);
       injectCumBar(data.facets);
     } catch (e) {
       showToast(e.message);
@@ -1483,7 +1556,6 @@
           </section>`;
       }).join('');
 
-      document.getElementById('headerMeta').textContent = `주간 브리핑 · ${data.week} 주`;
       main.innerHTML = `
         <div class="cum-bar brief-bar">
           <div class="brief-week-row"><span class="facet-label">기준 주</span>${weekSel}</div>
@@ -1495,6 +1567,102 @@
       main.innerHTML = `<div class="state-box"><div class="icon">⚠️</div><p>${e.message}</p></div>`;
     } finally {
       setBtn(false);
+    }
+  }
+
+  // ── 크리에이티브 노트 ────────────────────────────────────────
+  async function fetchNotes() {
+    const main = document.getElementById('mainContent');
+    main.className = 'main tc-main';
+    main.innerHTML = '<div class="state-box"><div class="spinner"></div><p>노트 불러오는 중…</p></div>';
+    try {
+      const res = await fetch('/api/notes');
+      const { notes = [] } = await res.json();
+      if (!notes.length) {
+        main.innerHTML = '<div class="state-box"><div class="icon">✍️</div><p>아직 작성된 노트가 없습니다</p></div>';
+        return;
+      }
+      main.innerHTML = `<div class="tc-scroll note-scroll"><div class="note-list">` +
+        notes.map(n => `
+          <div class="note-item" onclick="openNote(${n.id})">
+            <div class="note-item-title">${n.title}</div>
+            <div class="note-item-meta">${n.week ? n.week + ' 주 소재' : ''} · 소재 ${n.item_count}건 · ${(n.created_at || '').slice(0, 10)} 작성</div>
+          </div>`).join('') + `</div></div>`;
+    } catch (e) {
+      showToast(e.message);
+      main.innerHTML = `<div class="state-box"><div class="icon">⚠️</div><p>${e.message}</p></div>`;
+    }
+  }
+
+  async function openNote(id) {
+    const main = document.getElementById('mainContent');
+    main.innerHTML = '<div class="state-box"><div class="spinner"></div><p>노트 여는 중…</p></div>';
+    try {
+      const res = await fetch(`/api/notes/${id}`);
+      if (!res.ok) { const e = await res.json(); throw new Error(e.detail || `HTTP ${res.status}`); }
+      const note = await res.json();
+
+      const itemsHtml = (note.items || []).map((it, i) => {
+        const c = it.creative || {};
+        const key = `note_${note.id}_${it.unit_id}`;
+        creativeStore[key] = {
+          creative: { id: it.unit_id, creative_url: c.creative_url, thumb_url: c.thumb_url,
+                      video_duration: c.video_duration, width: c.width, height: c.height },
+          unit: { id: it.unit_id, ad_type: c.ad_type, network: c.network, country: c.country, ad_formats: [] },
+          appInfo: { name: c.app_name, publisher_name: c.publisher, icon_url: c.icon_url },
+        };
+        const isVideo = (c.ad_type || '').includes('video');
+        return `
+          <section class="note-creative">
+            <div class="note-media" onclick="openCreativeModal('${key}')" title="클릭하여 재생/확대">
+              ${c.thumb_url ? `<img src="${c.thumb_url}" alt="">` : '<div class="tc-thumb-ph">🖼️</div>'}
+              ${isVideo ? '<div class="tc-play">▶</div>' : ''}
+            </div>
+            <div class="note-text">
+              <div class="note-app-row">
+                ${c.icon_url ? `<img class="tc-app-icon" src="${c.icon_url}" alt="">` : ''}
+                <div>
+                  <div class="note-app-name">${c.app_name || '—'}</div>
+                  <div class="note-app-meta">${c.network || ''} · ${c.country || ''} · ${c.ad_type || ''}</div>
+                </div>
+                <span class="note-verdict">${it.verdict || ''}</span>
+              </div>
+              <h3 class="note-headline">“${it.headline || ''}”</h3>
+              ${(it.body || []).map(p => `<p class="note-p">${p}</p>`).join('')}
+              ${(it.learnings || []).length ? `<div class="note-take good"><b>가져갈 것</b><ul>` +
+                it.learnings.map(l => `<li>${l}</li>`).join('') + `</ul></div>` : ''}
+              ${(it.warnings || []).length ? `<div class="note-take bad"><b>하지 말 것</b><ul>` +
+                it.warnings.map(w => `<li>${w}</li>`).join('') + `</ul></div>` : ''}
+            </div>
+          </section>`;
+      }).join('');
+
+      const syn = note.synthesis;
+      const synHtml = syn ? `
+        <section class="note-synthesis">
+          <h2>${syn.title || '종합'}</h2>
+          ${(syn.points || []).map((p, i) => `
+            <div class="syn-point">
+              <div class="syn-title">${i + 1}. ${p.title}</div>
+              <p class="note-p">${p.body}</p>
+            </div>`).join('')}
+        </section>` : '';
+
+      main.innerHTML = `
+        <div class="tc-scroll note-scroll">
+          <div class="note-page">
+            <button class="note-back" onclick="fetchNotes()">← 노트 목록</button>
+            <h1 class="note-title">${note.title}</h1>
+            <div class="note-date">${note.week ? note.week + ' 주 소재' : ''} · ${(note.created_at || '').slice(0, 10)} 작성</div>
+            ${note.intro ? `<p class="note-intro">${note.intro}</p>` : ''}
+            ${itemsHtml}
+            ${synHtml}
+          </div>
+        </div>`;
+      main.querySelector('.note-scroll').scrollTop = 0;
+    } catch (e) {
+      showToast(e.message);
+      main.innerHTML = `<div class="state-box"><div class="icon">⚠️</div><p>${e.message}</p></div>`;
     }
   }
 

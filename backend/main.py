@@ -147,12 +147,19 @@ async def top_advertisers(
         return category
 
     # 모든 조합으로 병렬 호출
+    # unified 네트워크는 플랫폼 구분이 없어 platform='all'로 1회만 호출 (중복 호출 = 쿼터 낭비)
+    combo_keys = []
+    for p in platforms:
+        for net in networks_for(p):
+            eff_p = "all" if net in UNIFIED_ONLY_NETWORKS else p
+            for at in ad_types_list:
+                for c in countries:
+                    key = (eff_p, net, at, c)
+                    if key not in combo_keys:
+                        combo_keys.append(key)
     tasks = [
         fetch_safe(p, at, net, c, category_for(p), date_str, limit)
-        for p in platforms
-        for net in networks_for(p)
-        for at in ad_types_list
-        for c in countries
+        for p, net, at, c in combo_keys
     ]
 
     if not tasks:
@@ -219,12 +226,19 @@ async def top_creatives(
             return ANDROID_CATEGORIES.get(ios_label, "game") if ios_label else "game"
         return category
 
+    # unified 네트워크는 플랫폼 구분이 없어 platform='all'로 1회만 호출 (중복 호출 = 쿼터 낭비)
+    combo_keys = []
+    for p in platforms:
+        for net in networks_for(p):
+            eff_p = "all" if net in UNIFIED_ONLY_NETWORKS else p
+            for at in ad_types_list:
+                for c in countries:
+                    key = (eff_p, net, at, c)
+                    if key not in combo_keys:
+                        combo_keys.append(key)
     tasks = [
         fetch_safe(p, at, net, c, category_for(p), date_str, limit)
-        for p in platforms
-        for net in networks_for(p)
-        for at in ad_types_list
-        for c in countries
+        for p, net, at, c in combo_keys
     ]
     if not tasks:
         return {"total": 0, "creatives": []}
@@ -305,8 +319,10 @@ async def creative_history(unit_ids: str = Query(...)):
     return {"history": history}
 
 
-# 누적 상위 소재 등급 → 최소 등장 주 수
-TIER_MIN_WEEKS = {"half": 24, "quarter": 12, "month": 4}
+# 누적 상위 소재 등급 → 등장 주 수 구간 [min, max)
+# 포함 관계가 아니라 배타적 구간 — 등급마다 다른 소재가 나오도록
+# (포함 관계 + 주수 내림차순 정렬이면 모든 등급 상단이 동일해지는 문제)
+TIER_WEEK_BANDS = {"half": (24, 999), "quarter": (12, 24), "month": (4, 12)}
 
 # 네트워크 노출 우선순위 (파셋 칩 정렬용 — 집행 매체 우선)
 NETWORK_PRIORITY = {n: i for i, n in enumerate(IOS_NETWORKS)}
@@ -314,7 +330,7 @@ NETWORK_PRIORITY = {n: i for i, n in enumerate(IOS_NETWORKS)}
 
 @app.get("/api/cumulative-top")
 async def cumulative_top(
-    tier: str = Query("half"),          # half(반기 24주+) | quarter(분기 12주+) | month(월간 4주+)
+    tier: str = Query("half"),          # half(반기 24~26주) | quarter(분기 12~23주) | month(월간 4~11주)
     network: str = Query("all"),
     country: str = Query("all"),
     platform: str = Query("all"),
@@ -323,13 +339,20 @@ async def cumulative_top(
 ):
     """누적 상위 소재 — 스냅샷 DB에서 '오래 살아남은' 소재를 등급별로 반환.
     센서타워 호출 없이 로컬 DB만 조회하므로 쿼터 소모가 없다."""
-    min_weeks = TIER_MIN_WEEKS.get(tier)
-    if min_weeks is None:
+    band = TIER_WEEK_BANDS.get(tier)
+    if band is None:
         raise HTTPException(status_code=400, detail=f"알 수 없는 등급: {tier}")
+    min_weeks, max_weeks = band
     if not os.path.exists(SNAPSHOT_DB):
-        return {"total": 0, "creatives": [], "tier": tier, "min_weeks": min_weeks}
+        return {"total": 0, "creatives": [], "tier": tier,
+                "min_weeks": min_weeks, "max_weeks": max_weeks}
 
     sel = {"network": network, "country": country, "platform": platform, "ad_type": ad_types}
+
+    def platform_cond(val):
+        # unified 네트워크 데이터는 platform='all'(양 플랫폼 공통)로 저장됨
+        # → ios/android 필터 선택 시에도 매칭되어야 한다
+        return "(platform = ? OR platform = 'all')"
 
     def facets(conn):
         """차원별 선택 가능 값과 개수. 각 차원은 '자기 자신을 제외한' 나머지 필터만 적용한다
@@ -339,17 +362,45 @@ async def cumulative_top(
             where, params = ["unit_id != ''"], []
             for col, val in sel.items():
                 if col != dim and val != "all":
-                    where.append(f"{col} = ?")
+                    where.append(platform_cond(val) if col == "platform" else f"{col} = ?")
                     params.append(val)
             w = " AND ".join(where)
+
+            if dim == "platform":
+                # platform 차원은 GROUP BY가 불가('all' 행은 양쪽 모두에 속함)
+                # → 값별로 별도 카운트
+                vals = []
+                for v in ("ios", "android"):
+                    cnt = conn.execute(
+                        f"""{SNAP_CTE}
+                            SELECT COUNT(*) FROM (
+                                SELECT unit_id, COUNT(DISTINCT week) wk
+                                FROM snap WHERE {w} AND (platform = ? OR platform = 'all')
+                                GROUP BY unit_id HAVING wk >= ? AND wk < ?
+                            )""",
+                        params + [v, min_weeks, max_weeks],
+                    ).fetchone()[0]
+                    if cnt:
+                        vals.append({"value": v, "count": cnt})
+                total = conn.execute(
+                    f"""{SNAP_CTE}
+                        SELECT COUNT(*) FROM (
+                            SELECT unit_id, COUNT(DISTINCT week) wk
+                            FROM snap WHERE {w}
+                            GROUP BY unit_id HAVING wk >= ? AND wk < ?
+                        )""",
+                    params + [min_weeks, max_weeks],
+                ).fetchone()[0]
+                out[dim] = {"all": total, "values": vals}
+                continue
             rows = conn.execute(
                 f"""{SNAP_CTE}
                     SELECT d, COUNT(*) FROM (
                         SELECT {dim} AS d, unit_id, COUNT(DISTINCT week) wk
                         FROM snap WHERE {w}
-                        GROUP BY {dim}, unit_id HAVING wk >= ?
+                        GROUP BY {dim}, unit_id HAVING wk >= ? AND wk < ?
                     ) GROUP BY d ORDER BY 2 DESC""",
-                params + [min_weeks],
+                params + [min_weeks, max_weeks],
             ).fetchall()
             if dim == "network":
                 # 네트워크는 건수가 아니라 매체 우선순위 순으로 노출
@@ -359,9 +410,9 @@ async def cumulative_top(
                     SELECT COUNT(*) FROM (
                         SELECT unit_id, COUNT(DISTINCT week) wk
                         FROM snap WHERE {w}
-                        GROUP BY unit_id HAVING wk >= ?
+                        GROUP BY unit_id HAVING wk >= ? AND wk < ?
                     )""",
-                params + [min_weeks],
+                params + [min_weeks, max_weeks],
             ).fetchone()[0]
             out[dim] = {"all": total, "values": [{"value": r[0], "count": r[1]} for r in rows]}
         return out
@@ -370,7 +421,7 @@ async def cumulative_top(
         where, params = ["unit_id != ''"], []
         for col, val in sel.items():
             if val != "all":
-                where.append(f"{col} = ?")
+                where.append(platform_cond(val) if col == "platform" else f"{col} = ?")
                 params.append(val)
 
         sql = f"""
@@ -395,14 +446,14 @@ async def cumulative_top(
             FROM snap
             WHERE {' AND '.join(where)}
             GROUP BY unit_id
-            HAVING weeks >= ?
+            HAVING weeks >= ? AND weeks < ?
             ORDER BY weeks DESC, avg_pct ASC
             LIMIT ?
         """
         conn = sqlite3.connect(SNAPSHOT_DB)
         conn.row_factory = sqlite3.Row
         try:
-            return [dict(r) for r in conn.execute(sql, params + [min_weeks, limit])], facets(conn)
+            return [dict(r) for r in conn.execute(sql, params + [min_weeks, max_weeks, limit])], facets(conn)
         finally:
             conn.close()
 
@@ -439,7 +490,7 @@ async def cumulative_top(
 
     return {
         "total": len(items), "creatives": items,
-        "tier": tier, "min_weeks": min_weeks, "facets": facet_data,
+        "tier": tier, "min_weeks": min_weeks, "max_weeks": max_weeks, "facets": facet_data,
     }
 
 
@@ -668,6 +719,102 @@ async def weekly_brief(week: str = Query(None)):
         "week": cur_week, "weeks": weeks, "sections": sections, "report": report,
         "rise_threshold": RISE_THRESHOLD, "longrun_weeks": LONGRUN_WEEKS,
     }
+
+
+# ── 크리에이티브 노트 ────────────────────────────────────────
+# CD 관점의 소재 심층 리뷰. 필요할 때만 수동(세션)으로 작성해 적재한다.
+
+NOTES_SCHEMA = """
+CREATE TABLE IF NOT EXISTS creative_notes (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    title      TEXT NOT NULL,
+    week       TEXT,               -- 소재 기준 주차
+    created_at TEXT,
+    content    TEXT NOT NULL       -- JSON: {intro, items[], synthesis}
+)
+"""
+
+
+def _unit_details(conn, unit_ids):
+    """unit_id → 카드 렌더용 소재·앱 정보"""
+    if not unit_ids:
+        return {}
+    qm = ",".join("?" * len(unit_ids))
+    out = {}
+    for r in conn.execute(f"""
+        SELECT unit_id, MAX(app_name) app_name, MAX(publisher) publisher,
+               MAX(icon_url) icon_url, MAX(ad_type) ad_type,
+               MAX(creative_url) creative_url, MAX(thumb_url) thumb_url,
+               MAX(video_duration) video_duration, MAX(width) w, MAX(height) h,
+               GROUP_CONCAT(DISTINCT network) networks,
+               GROUP_CONCAT(DISTINCT country) countries
+        FROM weekly_snapshots WHERE unit_id IN ({qm}) GROUP BY unit_id""", list(unit_ids)):
+        out[r[0]] = {
+            "app_name": r[1], "publisher": r[2], "icon_url": r[3], "ad_type": r[4],
+            "creative_url": r[5], "thumb_url": r[6], "video_duration": r[7],
+            "width": r[8], "height": r[9], "network": r[10], "country": r[11],
+        }
+    return out
+
+
+@app.get("/api/notes")
+async def list_notes():
+    """노트 목록 (최신순)"""
+    if not os.path.exists(SNAPSHOT_DB):
+        return {"notes": []}
+
+    def query():
+        conn = sqlite3.connect(SNAPSHOT_DB)
+        try:
+            conn.executescript(NOTES_SCHEMA)
+            rows = conn.execute(
+                "SELECT id, title, week, created_at, content FROM creative_notes ORDER BY id DESC"
+            ).fetchall()
+            notes = []
+            for r in rows:
+                import json as _json
+                c = _json.loads(r[4])
+                notes.append({
+                    "id": r[0], "title": r[1], "week": r[2], "created_at": r[3],
+                    "item_count": len(c.get("items", [])),
+                })
+            return notes
+        finally:
+            conn.close()
+
+    return {"notes": await asyncio.to_thread(query)}
+
+
+@app.get("/api/notes/{note_id}")
+async def get_note(note_id: int):
+    """노트 상세 — 본문 + 소재 카드 정보 조인"""
+    if not os.path.exists(SNAPSHOT_DB):
+        raise HTTPException(status_code=404, detail="노트 없음")
+
+    def query():
+        import json as _json
+        conn = sqlite3.connect(SNAPSHOT_DB)
+        try:
+            conn.executescript(NOTES_SCHEMA)
+            row = conn.execute(
+                "SELECT id, title, week, created_at, content FROM creative_notes WHERE id = ?",
+                (note_id,)).fetchone()
+            if not row:
+                return None
+            content = _json.loads(row[4])
+            ids = [it["unit_id"] for it in content.get("items", []) if it.get("unit_id")]
+            details = _unit_details(conn, ids)
+            for it in content.get("items", []):
+                it["creative"] = details.get(it.get("unit_id"))
+            return {"id": row[0], "title": row[1], "week": row[2],
+                    "created_at": row[3], **content}
+        finally:
+            conn.close()
+
+    note = await asyncio.to_thread(query)
+    if note is None:
+        raise HTTPException(status_code=404, detail="노트 없음")
+    return note
 
 
 @app.get("/api/download")

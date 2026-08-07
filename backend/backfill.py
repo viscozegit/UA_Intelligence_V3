@@ -192,10 +192,14 @@ async def main(n_weeks: int, concurrency: int = CONCURRENCY, pace: float = 0.0):
         sys.exit("SENSORTOWER_API_TOKEN이 없습니다 (backend/.env 확인)")
 
     weeks = mondays(n_weeks)
-    # 네트워크를 최외곽에 두어 우선순위 높은 매체(Meta 등)가 먼저 수집되도록 한다
+    # 네트워크를 최외곽에 두어 우선순위 높은 매체(Meta 등)가 먼저 수집되도록 한다.
+    # unified 네트워크는 ios/android 응답이 동일하므로 platform='all'로 1회만 수집
+    # (플랫폼별 2회 수집 시 완전 중복 저장 + 쿼터 낭비)
     combos = [
         (w, p, n, c, a)
-        for n in NETWORKS for w in weeks for p in PLATFORMS
+        for n in NETWORKS
+        for p in (["all"] if n in UNIFIED_ONLY_NETWORKS else PLATFORMS)
+        for w in weeks
         for c in COUNTRIES for a in AD_TYPES
     ]
     done = done_combos(conn)
