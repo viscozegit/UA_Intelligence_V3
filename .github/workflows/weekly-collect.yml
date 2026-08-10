@@ -1,0 +1,51 @@
+name: weekly-collect
+
+# 매주 월요일 00:00 UTC = 09:00 KST — 맥·앱 상태와 무관하게 GitHub 서버에서 실행
+on:
+  schedule:
+    - cron: '0 0 * * 1'
+  workflow_dispatch: {}   # 수동 실행 버튼
+
+permissions:
+  contents: write
+
+concurrency:
+  group: weekly-collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Collect weekly snapshots (backfill)
+        env:
+          SENSORTOWER_API_TOKEN: ${{ secrets.SENSORTOWER_API_TOKEN }}
+        run: python backend/backfill.py --weeks 4 --concurrency 3 --pace 6
+
+      - name: Collect SOV + downloads
+        env:
+          SENSORTOWER_API_TOKEN: ${{ secrets.SENSORTOWER_API_TOKEN }}
+        run: python backend/sov_collect.py --weeks 8
+
+      - name: Commit & push (Render 자동 재배포 트리거)
+        run: |
+          git config user.name  "ua-intelligence-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add backend/snapshots.db
+          if git diff --cached --quiet; then
+            echo "변경 없음 — 커밋 생략"
+          else
+            git commit -m "Weekly snapshot update ($(date +%F)) [auto]"
+            git pull --rebase origin main
+            git push origin main
+          fi

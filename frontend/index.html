@@ -472,6 +472,10 @@
       box-shadow: var(--shadow-1);
     }
     .report-block.wide { grid-column: 1 / -1; }
+    .comment-block { border-left: 3px solid var(--accent); }
+    .comment-p { font-size: 13px; line-height: 1.7; color: var(--text-2); margin-bottom: 8px; }
+    .comment-p:last-child { margin-bottom: 0; }
+    .comment-p b { color: var(--text); }
     .report-title {
       font-size: 12px; font-weight: 700; margin-bottom: 12px;
       text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2);
@@ -1659,8 +1663,15 @@
              <span class="anomaly-note">원인 확인 필요</span></div>`).join('')
         : `<div class="anomaly none">직전 4주 평균 대비 특이사항 없음</div>`;
 
+      const commentHtml = data.comment ? `
+        <div class="report-block wide comment-block">
+          <div class="report-title">주간 코멘트</div>
+          ${data.comment.text.split('\n').filter(Boolean).map(p => `<p class="comment-p">${p}</p>`).join('')}
+        </div>` : '';
+
       const reportHtml = `
         <div class="report">
+          ${commentHtml}
           <div class="report-block wide">
             <div class="report-title">이번주 체크 소재</div>
             ${mustCards ? `<div class="must-list">${mustCards}</div>`

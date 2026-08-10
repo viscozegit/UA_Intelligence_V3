@@ -778,6 +778,22 @@ async def weekly_brief(week: str = Query(None)):
             conn.close()
 
     cur_week, weeks, raw, details, report = await asyncio.to_thread(query)
+
+    # 주간 코멘트 (온디맨드/스케줄로 작성된 서술 해석 — 있으면 브리핑 상단에 표시)
+    def get_comment():
+        conn = sqlite3.connect(SNAPSHOT_DB)
+        try:
+            conn.executescript(
+                "CREATE TABLE IF NOT EXISTS weekly_comments ("
+                "week TEXT PRIMARY KEY, comment TEXT NOT NULL, created_at TEXT)")
+            row = conn.execute(
+                "SELECT comment, created_at FROM weekly_comments WHERE week = ?",
+                (cur_week,)).fetchone()
+            return {"text": row[0], "created_at": row[1]} if row else None
+        finally:
+            conn.close()
+
+    comment = await asyncio.to_thread(get_comment) if cur_week else None
     if cur_week is None:
         return {"week": None, "weeks": [], "sections": {}}
 
@@ -902,6 +918,7 @@ async def weekly_brief(week: str = Query(None)):
     ]
     return {
         "week": cur_week, "weeks": weeks, "sections": sections, "report": report,
+        "comment": comment,
         "rise_threshold": RISE_THRESHOLD, "longrun_weeks": LONGRUN_WEEKS,
     }
 
