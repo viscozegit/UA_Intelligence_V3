@@ -327,6 +327,10 @@ TIER_WEEK_BANDS = {"half": (24, 999), "quarter": (12, 24), "month": (4, 12)}
 # 네트워크 노출 우선순위 (파셋 칩 정렬용 — 집행 매체 우선)
 NETWORK_PRIORITY = {n: i for i, n in enumerate(IOS_NETWORKS)}
 
+# 누적 탭의 장르 필터 — app_categories(tag_categories.py로 사전 태깅)를 참조.
+# weekly_snapshots 자체엔 카테고리 정보가 없어 collection 시점이 아니라 앱 조회로 역태깅한 값.
+CATEGORY_GENRES = ["action", "role_playing", "strategy"]
+
 # 누적 탭에서 주평균 다운로드가 이 값 미만인 앱의 소재는 제외
 # (주 1천 미만 = 사실상 UA 미집행 — 그 '장수'는 벤치마킹 노이즈)
 # 단, 다운로드 미수집 앱은 판단 불가이므로 통과시킨다
@@ -340,6 +344,7 @@ async def cumulative_top(
     country: str = Query("all"),
     platform: str = Query("all"),
     ad_types: str = Query("all"),
+    category: str = Query("all"),       # action | role_playing | strategy | all
     limit: int = Query(300, le=1000),
 ):
     """누적 상위 소재 — 스냅샷 DB에서 '오래 살아남은' 소재를 등급별로 반환.
@@ -352,12 +357,21 @@ async def cumulative_top(
         return {"total": 0, "creatives": [], "tier": tier,
                 "min_weeks": min_weeks, "max_weeks": max_weeks}
 
-    sel = {"network": network, "country": country, "platform": platform, "ad_type": ad_types}
+    sel = {"network": network, "country": country, "platform": platform,
+           "ad_type": ad_types, "category": category}
 
     def platform_cond(val):
         # unified 네트워크 데이터는 platform='all'(양 플랫폼 공통)로 저장됨
         # → ios/android 필터 선택 시에도 매칭되어야 한다
         return "(platform = ? OR platform = 'all')"
+
+    def cond_for(col, val):
+        """차원별 WHERE 조각 + 바인딩 값. platform·category는 단순 등호가 아니다."""
+        if col == "platform":
+            return platform_cond(val), val
+        if col == "category":
+            return "app_id IN (SELECT app_id FROM app_categories WHERE genres LIKE ?)", f"%{val}%"
+        return f"{col} = ?", val
 
     def facets(conn):
         """차원별 선택 가능 값과 개수. 각 차원은 '자기 자신을 제외한' 나머지 필터만 적용한다
@@ -367,9 +381,38 @@ async def cumulative_top(
             where, params = ["unit_id != ''"], []
             for col, val in sel.items():
                 if col != dim and val != "all":
-                    where.append(platform_cond(val) if col == "platform" else f"{col} = ?")
-                    params.append(val)
+                    frag, p = cond_for(col, val)
+                    where.append(frag)
+                    params.append(p)
             w = " AND ".join(where)
+
+            if dim == "category":
+                # 고정 3개 장르만 — 값별 별도 카운트 (플랫폼과 동일한 이유: 등호가 아니라 LIKE)
+                vals = []
+                for g in CATEGORY_GENRES:
+                    cnt = conn.execute(
+                        f"""{SNAP_CTE}
+                            SELECT COUNT(*) FROM (
+                                SELECT unit_id, COUNT(DISTINCT week) wk
+                                FROM snap WHERE {w}
+                                  AND app_id IN (SELECT app_id FROM app_categories WHERE genres LIKE ?)
+                                GROUP BY unit_id HAVING wk >= ? AND wk < ?
+                            )""",
+                        params + [f"%{g}%", min_weeks, max_weeks],
+                    ).fetchone()[0]
+                    if cnt:
+                        vals.append({"value": g, "count": cnt})
+                total = conn.execute(
+                    f"""{SNAP_CTE}
+                        SELECT COUNT(*) FROM (
+                            SELECT unit_id, COUNT(DISTINCT week) wk
+                            FROM snap WHERE {w}
+                            GROUP BY unit_id HAVING wk >= ? AND wk < ?
+                        )""",
+                    params + [min_weeks, max_weeks],
+                ).fetchone()[0]
+                out[dim] = {"all": total, "values": vals}
+                continue
 
             if dim == "platform":
                 # platform 차원은 GROUP BY가 불가('all' 행은 양쪽 모두에 속함)
@@ -426,8 +469,9 @@ async def cumulative_top(
         where, params = ["unit_id != ''"], []
         for col, val in sel.items():
             if val != "all":
-                where.append(platform_cond(val) if col == "platform" else f"{col} = ?")
-                params.append(val)
+                frag, p = cond_for(col, val)
+                where.append(frag)
+                params.append(p)
 
         sql = f"""
             {SNAP_CTE}

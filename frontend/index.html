@@ -986,6 +986,11 @@
           ① 신규 즉시 상위 5% 이내 ② 기존 소재 ▲30%p 이상 급등
           ③ 소재 대정리 후 생존(광고주의 선택) ④ 앱 물량 ×1.5 이상 급증 속 간판 소재.</div>
 
+        <div class="rg-sec"><b>누적 탭 · 카테고리 필터</b>
+          소재 수집 자체는 항상 'Games 전체'라 장르 정보가 없습니다 — 대신 각 앱의
+          Sensor Tower 등록 장르를 별도 조회해 역태깅(app_categories)했습니다.
+          아직 전체 앱의 일부만 태깅되어 있어 '전체'가 기본값입니다.</div>
+
         <div class="rg-sec"><b>보조 지표 (선정에는 미반영, 판정 근거로만)</b>
           <u>SOV</u> = 해당 매체·국가 관측 노출 중 이 앱의 점유율 — 판의 크기까지 반영한 절대 물량.
           <u>주간 다운로드</u> = 앱 설치 추정치 — 노출이 설치로 이어지는지의 정황 증거.
@@ -1447,14 +1452,16 @@
     quarter: '한 분기 이상(12~23주) 상위권을 유지한 소재 모음 — 테스트를 통과해 자리 잡은 그룹',
     month:   '한 달 이상(4~11주) 살아남은 소재 모음 — 초기 검증을 통과한 신흥 그룹',
   };
-  const DIM_LABEL  = { network: '네트워크', country: '국가', platform: '플랫폼', ad_type: '유형' };
-  const VAL_LABEL  = { ios: 'iOS', android: 'Android', video: 'Video', image: 'Image' };
+  const DIM_LABEL  = { network: '네트워크', country: '국가', platform: '플랫폼', ad_type: '유형', category: '카테고리' };
+  const VAL_LABEL  = { ios: 'iOS', android: 'Android', video: 'Video', image: 'Image',
+                       action: 'Action', role_playing: 'Role Playing', strategy: 'Strategy' };
 
   // 조합 간 평균이 섞이지 않도록 '전체' 없이 단일 조합 선택을 강제한다
   // (unified 네트워크는 플랫폼 구분이 없으므로 platform='all' 고정 + 칩 숨김)
+  // 단, category는 앱 태깅이 일부만 되어 있어 '전체'를 허용한다(기본값)
   const UNIFIED_NETS = ['Meta Audience Network', 'TikTok'];
   let cumTier = 'half';
-  let cumSel  = { network: 'Meta Audience Network', country: 'KR', platform: 'all', ad_type: 'video' };
+  let cumSel  = { network: 'Meta Audience Network', country: 'KR', platform: 'all', ad_type: 'video', category: 'all' };
 
   function setCumTier(t) {
     if (t === cumTier) return;
@@ -1486,10 +1493,17 @@
       country: ['US', 'KR'],
       platform: ['ios', 'android'],
       ad_type: ['video', 'image'],
+      category: ['action', 'role_playing', 'strategy'],
     };
+    // category는 앱 태깅 커버리지가 아직 부분적이라 '전체' 칩을 둔다 (다른 dim은 단일 강제)
+    const HAS_ALL = { category: true };
     const group = dim => {
       const counts = Object.fromEntries((facets[dim]?.values || []).map(v => [v.value, v.count]));
-      const chips = DIM_DOMAIN[dim].map(v => {
+      const allChip = HAS_ALL[dim]
+        ? `<button class="chip-btn ${cumSel[dim] === 'all' ? 'active' : ''}"
+             onclick="setCumFilter('${dim}','all')">전체 <b>${facets[dim]?.all ?? 0}</b></button>`
+        : '';
+      const chips = allChip + DIM_DOMAIN[dim].map(v => {
         const n = counts[v] || 0;
         return `<button class="chip-btn ${cumSel[dim] === v ? 'active' : ''} ${n ? '' : 'empty'}"
           onclick="setCumFilter('${dim}','${v.replace(/'/g, "\\'")}')">
@@ -1502,7 +1516,7 @@
     // unified 네트워크 선택 시 플랫폼 칩 숨김 (구분 자체가 없음)
     const showPlatform = !UNIFIED_NETS.includes(cumSel.network);
     const netRow    = group('network');
-    const inlineRow = ['country', ...(showPlatform ? ['platform'] : []), 'ad_type']
+    const inlineRow = ['country', ...(showPlatform ? ['platform'] : []), 'ad_type', 'category']
       .map(group).join('');
 
     return `<div class="cum-bar">
@@ -1530,6 +1544,7 @@
       country:  cumSel.country,
       platform: cumSel.platform,
       ad_types: cumSel.ad_type,
+      category: cumSel.category,
       limit: 300,
     });
 
