@@ -30,9 +30,10 @@ TOKEN = os.getenv("SENSORTOWER_API_TOKEN", "")
 DB_PATH = BASE_DIR / "snapshots.db"
 BATCH = 100
 
-# 우리가 관심 있는 카테고리만 매핑 (그 외는 other로 태깅)
-IOS_CAT_LABEL = {7001: "action", 7014: "role_playing", 7017: "strategy"}
-AND_CAT_LABEL = {"game_action": "action", "game_role_playing": "role_playing", "game_strategy": "strategy"}
+# 우리가 관심 있는 카테고리만 매핑 (그 외는 미태깅)
+IOS_CAT_LABEL = {7001: "action", 7014: "role_playing", 7015: "simulation", 7017: "strategy"}
+AND_CAT_LABEL = {"game_action": "action", "game_role_playing": "role_playing",
+                  "game_simulation": "simulation", "game_strategy": "strategy"}
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS app_categories (

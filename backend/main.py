@@ -329,7 +329,7 @@ NETWORK_PRIORITY = {n: i for i, n in enumerate(IOS_NETWORKS)}
 
 # 누적 탭의 장르 필터 — app_categories(tag_categories.py로 사전 태깅)를 참조.
 # weekly_snapshots 자체엔 카테고리 정보가 없어 collection 시점이 아니라 앱 조회로 역태깅한 값.
-CATEGORY_GENRES = ["action", "role_playing", "strategy"]
+CATEGORY_GENRES = ["action", "role_playing", "simulation", "strategy"]
 
 # 누적 탭에서 주평균 다운로드가 이 값 미만인 앱의 소재는 제외
 # (주 1천 미만 = 사실상 UA 미집행 — 그 '장수'는 벤치마킹 노이즈)

@@ -37,12 +37,14 @@ UNIFIED_AD_TYPES = [
 UNIFIED_ONLY_NETWORKS = {"Meta Audience Network", "TikTok"}
 
 # iOS: 숫자 카테고리 ID / Android: 문자열 카테고리 슬러그
-# Soul Strike·ARES·Star Sailors 세 타이틀의 실제 등록 카테고리만 포함
-# (Soul Strike·ARES: Action+Role Playing / Star Sailors: Role Playing+Strategy)
+# Soul Strike·ARES·Star Sailors 세 타이틀의 실제 등록 카테고리(Action/Role Playing/Strategy)
+# + Simulation(방치형 경쟁작 커버 — 센서타워엔 'Idle' 카테고리가 따로 없고
+# 방치형은 대개 Simulation·Role Playing·Strategy에 흩어져 등록됨)
 IOS_CATEGORIES = {
     "Games (All)": "6014",
     "Action": "7001",
     "Role Playing": "7014",
+    "Simulation": "7015",
     "Strategy": "7017",
 }
 
@@ -50,6 +52,7 @@ ANDROID_CATEGORIES = {
     "Games (All)": "game",
     "Action": "game_action",
     "Role Playing": "game_role_playing",
+    "Simulation": "game_simulation",
     "Strategy": "game_strategy",
 }
 

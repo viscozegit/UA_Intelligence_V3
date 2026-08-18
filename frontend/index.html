@@ -1454,7 +1454,8 @@
   };
   const DIM_LABEL  = { network: '네트워크', country: '국가', platform: '플랫폼', ad_type: '유형', category: '카테고리' };
   const VAL_LABEL  = { ios: 'iOS', android: 'Android', video: 'Video', image: 'Image',
-                       action: 'Action', role_playing: 'Role Playing', strategy: 'Strategy' };
+                       action: 'Action', role_playing: 'Role Playing',
+                       simulation: 'Simulation', strategy: 'Strategy' };
 
   // 조합 간 평균이 섞이지 않도록 '전체' 없이 단일 조합 선택을 강제한다
   // (unified 네트워크는 플랫폼 구분이 없으므로 platform='all' 고정 + 칩 숨김)
@@ -1493,7 +1494,7 @@
       country: ['US', 'KR'],
       platform: ['ios', 'android'],
       ad_type: ['video', 'image'],
-      category: ['action', 'role_playing', 'strategy'],
+      category: ['action', 'role_playing', 'simulation', 'strategy'],
     };
     // category는 앱 태깅 커버리지가 아직 부분적이라 '전체' 칩을 둔다 (다른 dim은 단일 강제)
     const HAS_ALL = { category: true };
