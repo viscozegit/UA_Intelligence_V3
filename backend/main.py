@@ -56,10 +56,13 @@ async def fetch_safe(platform, ad_types, network, country, category, date_str, l
     (429 쿼터 초과가 '데이터 없음'으로 보이는 문제 방지)"""
     try:
         if network in UNIFIED_ONLY_NETWORKS:
-            # Meta Audience Network, TikTok 등은 unified 엔드포인트 사용
+            # Meta Audience Network, TikTok 등은 unified 엔드포인트 사용.
+            # period 기본값이 'month'라 명시하지 않으면 같은 달 안 모든 날짜가
+            # 월 시작일로 스냅되어 주차 선택이 무시된다 — 반드시 'week' 지정.
             data = await client.get_top_creatives_unified(
                 platform=platform, ad_types=ad_types, network=network,
                 country=country, category=category, date_str=date_str, limit=limit,
+                period="week",
             )
         else:
             data = await client.get_top_creatives(
